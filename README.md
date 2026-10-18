@@ -21,7 +21,7 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 | 运行 | `JavaExec` 类型的任务（如 `application` 插件的 `run`）作为可运行的应用 |
 | 自定义任务 | “Run Gradle Tasks…” 输入任意任务和参数，选中子项目时在该项目目录下运行 |
 | 选项 | 工具栏开关 Offline（`--offline`）；Gradle User Home（`--gradle-user-home`） |
-| 测试 | 运行项目、测试类或单个方法（`--tests`），读取 `build/test-results/test` 的 JUnit XML 报告 |
+| 测试 | 运行项目、测试类或单个方法（`--tests`），读取 `build/test-results/test` 的 JUnit XML 报告；`--rerun` 仅重新执行所选测试任务，编译等依赖仍使用增量缓存，避免旧报告被宿主过滤后显示为零 |
 | 诊断 | 把 javac 的 `文件:行: error|warning:` 和 Kotlin 的 `e:|w: file://…` 输出显示为问题 |
 | 依赖 | 每个项目按 source set 的 `compileClasspath`、`runtimeClasspath`、`annotationProcessor` 等配置显示依赖树；已出现过的组件标记为省略，不重复展开（与 `gradle dependencies` 的 `(*)` 相同） |
 | 内容根 | source set 的 Java/Kotlin/Groovy/Scala 源码、资源和注解处理器生成目录；`build` 与 `.gradle` 标为排除 |
@@ -83,6 +83,8 @@ node scripts/package.mjs
 ```bash
 GRADLE=/path/to/gradle node scripts/test.mjs
 ```
+
+只验证测试报告回归时可运行 `GRADLE=/path/to/gradle node scripts/test.mjs --test-results-only`；它连续运行两次相同测试，检查第二次报告刷新且测试类没有重新编译。
 
 测试使用临时工作区和独立的 Gradle User Home，每个 Gradle 命令最多运行 120 秒，结束时有界停止该测试的守护进程并清理临时目录。
 每次运行都使用 `--no-daemon`；初始化脚本自己的运行还带 `--warning-mode=fail`，出现弃用警告即失败。
