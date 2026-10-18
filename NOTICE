@@ -1,0 +1,16 @@
+Gradle for Lithe
+Copyright 2026 Lithe Community contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The icons in io.github.lithe-idea.gradle-build/icons/ come from the JetBrains
+IntelliJ Platform Community repository, licensed under the Apache License,
+Version 2.0, at revision 158b854d47ac9af2bbd99c0d7c354a5875cb6f81:
+
+  gradle.svg   plugins/gradle/resources/icons/expui/gradle.svg
+  offline.svg  platform/icons/src/actions/offlineMode.svg
+
+Copyright 2000-2023 JetBrains s.r.o. and contributors.
+
+Gradle is a trademark of Gradle, Inc. This plugin is not affiliated with or
+endorsed by Gradle, Inc.

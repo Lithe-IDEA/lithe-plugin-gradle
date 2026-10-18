@@ -1,0 +1,15 @@
+allprojects {
+    group = 'demo'
+    version = '1.0.0'
+}
+
+subprojects {
+    repositories {
+        mavenCentral()
+    }
+    plugins.withType(JavaPlugin).configureEach {
+        tasks.withType(JavaCompile).configureEach {
+            options.release.set(11)
+        }
+    }
+}

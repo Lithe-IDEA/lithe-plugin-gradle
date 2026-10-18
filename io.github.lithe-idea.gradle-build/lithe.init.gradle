@@ -1,0 +1,266 @@
+// Exports the build to Lithe. plugin.json passes this file with
+// --init-script to its model and dependency commands only; without Lithe's
+// project properties it registers its tasks and does nothing else.
+//
+//   litheModel             (root project) writes a litheBuildModel document
+//                          to -PlitheModelOutput: every project, its tasks,
+//                          and its source folders.
+//   litheDependencyReport  (root project) writes a litheDependencies
+//                          document to -PlitheDependenciesOutput: the
+//                          classpath trees of -PlitheDependenciesProject, or
+//                          of every project when it is absent.
+//   litheDependencies      (every project) resolves that project's trees;
+//                          the report depends on it, because Gradle resolves
+//                          a configuration only from its own project.
+//
+// The commands also pass --no-configuration-cache, since the tasks read the
+// project model, and --no-configure-on-demand, so every project is
+// configured. Only the outermost build exports; buildSrc and included builds
+// run this script too.
+
+import groovy.json.JsonOutput
+import java.util.concurrent.ConcurrentHashMap
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ModuleComponentSelector
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentSelector
+import org.gradle.api.artifacts.result.ResolvedDependencyResult
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+import org.gradle.api.file.SourceDirectorySet
+import org.gradle.api.plugins.ExtensionAware
+import org.gradle.api.tasks.JavaExec
+
+if (gradle.parent != null) {
+    return
+}
+
+final String MODEL_TASK = 'litheModel'
+final String REPORT_TASK = 'litheDependencyReport'
+final String PROJECT_TASK = 'litheDependencies'
+final Set<String> LITHE_TASKS = [MODEL_TASK, REPORT_TASK, PROJECT_TASK] as Set
+/** Languages whose plugins add a source directory set to each source set. */
+final List<String> LANGUAGES = ['kotlin', 'groovy', 'scala']
+
+def properties = gradle.startParameter.projectProperties
+String modelOutput = properties['litheModelOutput']
+String dependenciesOutput = properties['litheDependenciesOutput']
+String dependenciesProject = properties['litheDependenciesProject']
+
+def absolute = { File file -> file.toPath().toAbsolutePath().normalize().toString() }
+def isRoot = { project -> project.parent == null }
+// A root task name is a selector that runs in every project that has the
+// task, as `gradle build` does; a nested project's tasks run by path.
+def taskPrefix = { project -> isRoot(project) ? ':' : project.path + ':' }
+def sourceSetsOf = { project -> project.extensions.findByName('sourceSets') }
+def isTestSourceSet = { sourceSet -> sourceSet.name.toLowerCase(Locale.ROOT).contains('test') }
+
+// MARK: Model
+
+def modelDocument = [:]
+
+def addRoot = { List roots, Set seen, String owner, File directory, String kind ->
+    String path = absolute(directory)
+    if (seen.add("$kind\u0000$path")) {
+        roots << [project: owner, path: path, kind: kind]
+    }
+}
+
+def contentRoots = { project, String owner, List roots, Set seen ->
+    def sourceSets = sourceSetsOf(project)
+    if (sourceSets == null) {
+        return
+    }
+    sourceSets.each { sourceSet ->
+        boolean test = isTestSourceSet(sourceSet)
+        List<SourceDirectorySet> sources = [sourceSet.java]
+        if (sourceSet instanceof ExtensionAware) {
+            LANGUAGES.each { language ->
+                def set = sourceSet.extensions.findByName(language)
+                if (set instanceof SourceDirectorySet) {
+                    sources << set
+                }
+            }
+        }
+        sources.each { set -> set.srcDirs.each { addRoot(roots, seen, owner, it, test ? 'testSource' : 'source') } }
+        sourceSet.resources.srcDirs.each { addRoot(roots, seen, owner, it, test ? 'testResource' : 'resource') }
+        sourceSet.output.generatedSourcesDirs.files.each {
+            addRoot(roots, seen, owner, it, test ? 'generatedTestSource' : 'generatedSource')
+        }
+    }
+}
+
+def projectTasks = { project, String owner, List tasks ->
+    // Looking a task up creates it if it was only registered, as an import
+    // into an IDE does; the model then lists what `gradle tasks --all` lists.
+    // The names are a snapshot, so a task that creates others is safe.
+    project.tasks.names.each { taskName ->
+        if (LITHE_TASKS.contains(taskName)) {
+            return
+        }
+        def task = project.tasks.getByName(taskName)
+        def entry = [project: owner, name: task.name, template: 'gradle-task']
+        if (task.description) {
+            entry.description = task.description.toString()
+        }
+        entry.category = ['Tasks', task.group ? task.group.toString() : 'other']
+        if (task instanceof JavaExec) {
+            entry.execution = 'application'
+        }
+        entry.properties = [path: isRoot(project) ? task.name : task.path]
+        tasks << entry
+    }
+}
+
+if (modelOutput != null) {
+    gradle.projectsEvaluated { build ->
+        List projects = []
+        List tasks = []
+        List roots = []
+        Set seen = new HashSet()
+        build.rootProject.allprojects.each { project ->
+            String owner = absolute(project.projectDir)
+            def entry = [path: owner, name: project.name]
+            if (project.parent != null) {
+                entry.parent = absolute(project.parent.projectDir)
+            }
+            def values = [path: project.path, taskPrefix: taskPrefix(project)]
+            String group = project.group?.toString()
+            if (group) {
+                values.group = group
+            }
+            String version = project.version?.toString()
+            if (version && version != 'unspecified') {
+                values.version = version
+            }
+            entry.properties = values
+            projects << entry
+            contentRoots(project, owner, roots, seen)
+            projectTasks(project, owner, tasks)
+        }
+        modelDocument.putAll([
+            format: 'litheBuildModel',
+            version: 1,
+            projects: projects,
+            tasks: tasks,
+            contentRoots: roots,
+        ])
+    }
+}
+
+// MARK: Dependencies
+
+/** Finished trees by project path, filled by each project's task. */
+def dependencyTrees = new ConcurrentHashMap<String, Map>()
+
+/**
+ * One node per dependency. A component already shown in this configuration
+ * is marked omitted and not expanded again, like `(*)` in
+ * `gradle dependencies`, which keeps large graphs small.
+ */
+def dependencyNode
+dependencyNode = { result, Set visited ->
+    if (result instanceof UnresolvedDependencyResult) {
+        def requested = result.attempted
+        def node = requested instanceof ModuleComponentSelector
+            ? [name: requested.module, group: requested.group, version: requested.version]
+            : [name: requested.displayName]
+        String reason = result.failure?.message?.readLines()?.find { it.trim() }
+        node.properties = [unresolved: 'true']
+        if (reason) {
+            node.properties.failure = reason.trim().take(200)
+        }
+        node.children = []
+        return node
+    }
+    def selected = result.selected
+    def id = selected.id
+    def node
+    if (id instanceof ModuleComponentIdentifier) {
+        node = [name: id.module, group: id.group, version: id.version, properties: [:]]
+        def requested = result.requested
+        if (requested instanceof ModuleComponentSelector && requested.version && requested.version != id.version) {
+            node.properties.requested = requested.version
+        }
+    } else if (id instanceof ProjectComponentIdentifier) {
+        node = [name: id.projectName, properties: [kind: 'project', path: id.projectPath]]
+    } else {
+        node = [name: id.displayName, properties: [:]]
+    }
+    if (visited.add(id)) {
+        node.children = selected.dependencies
+            .findAll { !it.constraint }
+            .collect { dependencyNode(it, visited) }
+    } else {
+        node.properties.omitted = 'true'
+        node.children = []
+    }
+    return node
+}
+
+gradle.allprojects { project ->
+    project.tasks.register(PROJECT_TASK) { task ->
+        task.description = 'Resolves the classpath trees Lithe shows for this project.'
+        // The classpaths of every source set, as an IDE import shows them.
+        Set<String> names = new TreeSet<>()
+        sourceSetsOf(project)?.each { sourceSet ->
+            names << sourceSet.compileClasspathConfigurationName
+            names << sourceSet.runtimeClasspathConfigurationName
+            names << sourceSet.annotationProcessorConfigurationName
+        }
+        def configurations = names
+            .collect { project.configurations.findByName(it) }
+            .findAll { it != null && it.canBeResolved }
+        String path = project.path
+        String name = project.name
+        task.doLast {
+            List children = []
+            configurations.each { configuration ->
+                def root = configuration.incoming.resolutionResult.root
+                def direct = root.dependencies.findAll { !it.constraint }
+                if (!direct.isEmpty()) {
+                    Set visited = new HashSet()
+                    visited.add(root.id)
+                    children << [
+                        name: configuration.name,
+                        properties: [kind: 'configuration'],
+                        children: direct.collect { dependencyNode(it, visited) },
+                    ]
+                }
+            }
+            dependencyTrees.put(path, [name: name, properties: [kind: 'project', path: path], children: children])
+        }
+    }
+}
+
+gradle.rootProject { root ->
+    root.tasks.register(MODEL_TASK) { task ->
+        task.description = 'Writes the Lithe build model to -PlitheModelOutput.'
+        task.doLast {
+            if (modelOutput == null) {
+                throw new GradleException('Set -PlitheModelOutput to the file Lithe reads.')
+            }
+            new File(modelOutput).setText(JsonOutput.toJson(modelDocument) + '\n', 'UTF-8')
+        }
+    }
+    root.tasks.register(REPORT_TASK) { task ->
+        task.description = 'Writes the Lithe dependency trees to -PlitheDependenciesOutput.'
+        def selected = dependenciesProject == null ? null : root.findProject(dependenciesProject)
+        if (dependenciesProject != null && selected == null) {
+            throw new GradleException("Lithe found no project $dependenciesProject.")
+        }
+        List<String> paths = (selected == null ? root.allprojects : [selected])*.path
+        task.dependsOn(paths.collect { it == ':' ? ":$PROJECT_TASK" : "$it:$PROJECT_TASK" })
+        task.doLast {
+            if (dependenciesOutput == null) {
+                throw new GradleException('Set -PlitheDependenciesOutput to the file Lithe reads.')
+            }
+            List trees = paths.collect { dependencyTrees.get(it) }
+            def document = [
+                format: 'litheDependencies',
+                version: 1,
+                dependencies: selected == null ? trees : trees[0].children,
+            ]
+            new File(dependenciesOutput).setText(JsonOutput.toJson(document) + '\n', 'UTF-8')
+        }
+    }
+}
