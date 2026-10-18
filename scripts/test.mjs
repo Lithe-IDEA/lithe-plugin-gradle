@@ -14,7 +14,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -173,99 +173,119 @@ try {
   const byName = (name) => model.projects.find((project) => project.name === name);
   const task = (project, name) => model.tasks.find((entry) => entry.project === byName(project).path && entry.name === name);
 
-  await check("the model lists every project with its Gradle path", () => {
-    assert.equal(model.format, "litheBuildModel");
-    assert.deepEqual(model.projects.map((project) => project.name), ["multi", "app", "core"]);
-    assert.equal(byName("core").parent, byName("multi").path);
-    assert.deepEqual(byName("multi").properties, { path: ":", taskPrefix: ":", group: "demo", version: "1.0.0" });
-    assert.deepEqual(byName("core").properties, { path: ":core", taskPrefix: ":core:", group: "demo", version: "1.0.0" });
-  });
+  if (!process.argv.includes("--test-results-only")) {
+    await check("the model lists every project with its Gradle path", () => {
+      assert.equal(model.format, "litheBuildModel");
+      assert.deepEqual(model.projects.map((project) => project.name), ["multi", "app", "core"]);
+      assert.equal(byName("core").parent, byName("multi").path);
+      assert.deepEqual(byName("multi").properties, { path: ":", taskPrefix: ":", group: "demo", version: "1.0.0" });
+      assert.deepEqual(byName("core").properties, { path: ":core", taskPrefix: ":core:", group: "demo", version: "1.0.0" });
+    });
 
-  await check("tasks are filed under their Gradle group and run by path", () => {
-    assert.deepEqual(task("core", "test").category, ["Tasks", "verification"]);
-    assert.deepEqual(task("core", "compileJava").category, ["Tasks", "other"]);
-    assert.equal(task("core", "build").properties.path, ":core:build");
-    assert.equal(task("multi", "help").properties.path, "help", "a root task runs as a selector");
-    const templates = new Set(buildSystem.tasks.filter((entry) => entry.fromModel).map((entry) => entry.id));
-    assert.ok(model.tasks.every((entry) => templates.has(entry.template)), "every task names a fromModel template");
-    assert.ok(!model.tasks.some((entry) => entry.name.startsWith("lithe")), "Lithe's own tasks are hidden");
-  });
+    await check("tasks are filed under their Gradle group and run by path", () => {
+      assert.deepEqual(task("core", "test").category, ["Tasks", "verification"]);
+      assert.deepEqual(task("core", "compileJava").category, ["Tasks", "other"]);
+      assert.equal(task("core", "build").properties.path, ":core:build");
+      assert.equal(task("multi", "help").properties.path, "help", "a root task runs as a selector");
+      const templates = new Set(buildSystem.tasks.filter((entry) => entry.fromModel).map((entry) => entry.id));
+      assert.ok(model.tasks.every((entry) => templates.has(entry.template)), "every task names a fromModel template");
+      assert.ok(!model.tasks.some((entry) => entry.name.startsWith("lithe")), "Lithe's own tasks are hidden");
+    });
 
-  await check("JavaExec tasks are applications the run entries pick up", () => {
-    assert.equal(task("app", "run").execution, "application");
-    assert.equal(task("app", "run").properties.path, ":app:run");
-    assert.equal(task("core", "test").execution, undefined);
-  });
+    await check("JavaExec tasks are applications the run entries pick up", () => {
+      assert.equal(task("app", "run").execution, "application");
+      assert.equal(task("app", "run").properties.path, ":app:run");
+      assert.equal(task("core", "test").execution, undefined);
+    });
 
-  await check("source sets become content roots", () => {
-    const core = byName("core").path;
-    const kinds = model.contentRoots.filter((entry) => entry.project === core).map((entry) => [entry.kind, entry.path]);
-    for (const expected of [
-      ["source", join(core, "src", "main", "java")],
-      ["resource", join(core, "src", "main", "resources")],
-      ["testSource", join(core, "src", "test", "java")],
-      ["testResource", join(core, "src", "test", "resources")],
-      ["generatedSource", join(core, "build", "generated", "sources", "annotationProcessor", "java", "main")],
-    ]) {
-      assert.ok(kinds.some(([kind, path]) => kind === expected[0] && path === expected[1]), `${expected.join(" ")}`);
-    }
-    assert.ok(!model.contentRoots.some((entry) => entry.project === byName("multi").path));
-  });
+    await check("source sets become content roots", () => {
+      const core = byName("core").path;
+      const kinds = model.contentRoots.filter((entry) => entry.project === core).map((entry) => [entry.kind, entry.path]);
+      for (const expected of [
+        ["source", join(core, "src", "main", "java")],
+        ["resource", join(core, "src", "main", "resources")],
+        ["testSource", join(core, "src", "test", "java")],
+        ["testResource", join(core, "src", "test", "resources")],
+        ["generatedSource", join(core, "build", "generated", "sources", "annotationProcessor", "java", "main")],
+      ]) {
+        assert.ok(kinds.some(([kind, path]) => kind === expected[0] && path === expected[1]), `${expected.join(" ")}`);
+      }
+      assert.ok(!model.contentRoots.some((entry) => entry.project === byName("multi").path));
+    });
 
-  const projectDependencies = join(scratch, "app-dependencies.json");
-  await run(root, buildSystem.dependencies.arguments, { outputFile: projectDependencies, project: byName("app") }, STRICT);
-  capture("app-dependencies.json", projectDependencies);
-  await check("a project's tree lists its classpaths with the sibling project", () => {
-    const tree = JSON.parse(readFileSync(projectDependencies, "utf8"));
-    assert.equal(tree.format, "litheDependencies");
-    assert.deepEqual(tree.dependencies.map((node) => node.name), [
-      "compileClasspath",
-      "runtimeClasspath",
-      "testCompileClasspath",
-      "testRuntimeClasspath",
-    ]);
-    assert.deepEqual(tree.dependencies[0].children.map((node) => [node.name, node.properties]), [
-      ["core", { kind: "project", path: ":core" }],
-    ]);
-  });
+    const projectDependencies = join(scratch, "app-dependencies.json");
+    await run(root, buildSystem.dependencies.arguments, { outputFile: projectDependencies, project: byName("app") }, STRICT);
+    capture("app-dependencies.json", projectDependencies);
+    await check("a project's tree lists its classpaths with the sibling project", () => {
+      const tree = JSON.parse(readFileSync(projectDependencies, "utf8"));
+      assert.equal(tree.format, "litheDependencies");
+      assert.deepEqual(tree.dependencies.map((node) => node.name), [
+        "compileClasspath",
+        "runtimeClasspath",
+        "testCompileClasspath",
+        "testRuntimeClasspath",
+      ]);
+      assert.deepEqual(tree.dependencies[0].children.map((node) => [node.name, node.properties]), [
+        ["core", { kind: "project", path: ":core" }],
+      ]);
+    });
 
-  const workspaceDependencies = join(scratch, "dependencies.json");
-  await run(root, buildSystem.dependencies.arguments, { outputFile: workspaceDependencies }, STRICT);
-  capture("dependencies.json", workspaceDependencies);
-  await check("the workspace tree has one node per project with transitive children", () => {
-    const tree = JSON.parse(readFileSync(workspaceDependencies, "utf8"));
-    assert.deepEqual(tree.dependencies.map((node) => node.name), ["multi", "app", "core"]);
-    const core = tree.dependencies[2];
-    const testClasspath = core.children.find((node) => node.name === "testCompileClasspath");
-    const junit = testClasspath.children[0];
-    assert.deepEqual([junit.group, junit.name, junit.version], ["junit", "junit", "4.13.2"]);
-    assert.equal(junit.children[0].name, "hamcrest-core");
-  });
+    const workspaceDependencies = join(scratch, "dependencies.json");
+    await run(root, buildSystem.dependencies.arguments, { outputFile: workspaceDependencies }, STRICT);
+    capture("dependencies.json", workspaceDependencies);
+    await check("the workspace tree has one node per project with transitive children", () => {
+      const tree = JSON.parse(readFileSync(workspaceDependencies, "utf8"));
+      assert.deepEqual(tree.dependencies.map((node) => node.name), ["multi", "app", "core"]);
+      const core = tree.dependencies[2];
+      const testClasspath = core.children.find((node) => node.name === "testCompileClasspath");
+      const junit = testClasspath.children[0];
+      assert.deepEqual([junit.group, junit.name, junit.version], ["junit", "junit", "4.13.2"]);
+      assert.equal(junit.children[0].name, "hamcrest-core");
+    });
 
-  await check("an unknown project fails instead of writing an empty tree", async () => {
-    const missing = { properties: { path: ":missing" } };
-    await assert.rejects(
-      execute(root, [...SINGLE_USE, ...expand(buildSystem.dependencies.arguments, { outputFile: join(scratch, "x.json"), project: missing })], { quiet: true }),
-      /Gradle exited 1:/,
-    );
-    assert.ok(!existsSync(join(scratch, "x.json")), "the failed command wrote no document");
-  });
+    await check("an unknown project fails instead of writing an empty tree", async () => {
+      const missing = { properties: { path: ":missing" } };
+      await assert.rejects(
+        execute(root, [...SINGLE_USE, ...expand(buildSystem.dependencies.arguments, { outputFile: join(scratch, "x.json"), project: missing })], { quiet: true }),
+        /Gradle exited 1:/,
+      );
+      assert.ok(!existsSync(join(scratch, "x.json")), "the failed command wrote no document");
+    });
 
-  await check("reading the model and dependencies builds nothing", () => {
-    for (const directory of ["build", "core/build", "app/build"]) {
-      assert.ok(!existsSync(join(root, directory)), `${directory} was not created`);
-    }
-  });
+    await check("reading the model and dependencies builds nothing", () => {
+      for (const directory of ["build", "core/build", "app/build"]) {
+        assert.ok(!existsSync(join(root, directory)), `${directory} was not created`);
+      }
+    });
 
-  await run(root, buildSystem.test.arguments, { project: byName("core"), suite: "demo.core.GreeterTest" });
+  }
+
+  const testSelection = { project: byName("core"), suite: "demo.core.GreeterTest" };
+  await run(root, buildSystem.test.arguments, testSelection);
   await check("a filtered test run writes the report the results glob reads", () => {
     const report = readFileSync(join(root, "core", "build", "test-results", "test", "TEST-demo.core.GreeterTest.xml"), "utf8");
     assert.match(report, /<testsuite[^>]*name="demo\.core\.GreeterTest"[^>]*tests="2"/);
   });
 
-  await check("without Lithe's properties the init script does nothing", async () => {
-    await execute(root, [...STRICT, "-q", "--no-configuration-cache", "--init-script", join(pluginDir, "lithe.init.gradle"), "help"]);
+  await check("repeated tests refresh reports while compiled dependencies stay incremental", async () => {
+    const report = join(root, "core", "build", "test-results", "test", "TEST-demo.core.GreeterTest.xml");
+    const classFile = join(root, "core", "build", "classes", "java", "test", "demo", "core", "GreeterTest.class");
+    const compiledBefore = statSync(classFile).mtimeMs;
+    // A fixed old timestamp reproduces the host's stale-report rejection without
+    // sleeps or relying on how quickly the two Gradle invocations finish.
+    utimesSync(report, new Date(0), new Date(0));
+    const started = Date.now();
+    await run(root, buildSystem.test.arguments, testSelection);
+    assert.ok(statSync(report).mtimeMs >= started, "the repeated run must produce a current report");
+    assert.match(readFileSync(report, "utf8"), /<testsuite[^>]*name="demo\.core\.GreeterTest"[^>]*tests="2"/);
+    assert.equal(statSync(classFile).mtimeMs, compiledBefore, "test compilation must remain incremental");
   });
+
+  if (!process.argv.includes("--test-results-only")) {
+    await check("without Lithe's properties the init script does nothing", async () => {
+      await execute(root, [...STRICT, "-q", "--no-configuration-cache", "--init-script", join(pluginDir, "lithe.init.gradle"), "help"]);
+    });
+  }
   await check("the packaged plugin stays byte-identical after the workflow", () => {
     assert.deepEqual(packageSnapshot(), packageBefore);
   });

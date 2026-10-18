@@ -113,6 +113,7 @@
         "arguments": [
           { "value": "${project.property:taskPrefix}test", "when": "nestedProjectSelected" },
           { "value": "test", "when": "noNestedProjectSelected" },
+          "--rerun",
           { "value": "--tests", "when": "suiteSelected" },
           { "value": "${test.suite}", "when": ["suiteSelected", "noCaseSelected"] },
           { "value": "${test.suite}.${test.case}", "when": ["suiteSelected", "caseSelected"] }
