@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         # The oldest version plugin.json accepts, and a current one.
-        gradle: [7.6.4, 9.6.1]
+        gradle: ["7.6", "9.6.1"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

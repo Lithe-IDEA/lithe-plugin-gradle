@@ -12,8 +12,9 @@
 // Usage: node scripts/test.mjs
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -66,13 +67,71 @@ function expand(list, { outputFile, project, suite }) {
   return result;
 }
 
-function run(root, list, values = {}, extra = SINGLE_USE) {
-  const argv = [...extra, ...expand(buildSystem.invocation.globalArguments, values), ...expand(list, values)];
-  execFileSync(gradle, argv, { cwd: root, stdio: ["ignore", "ignore", "inherit"] });
-}
-
+const COMMAND_TIMEOUT_MS = 120_000;
+const CLEANUP_TIMEOUT_MS = 5_000;
 const scratch = mkdtempSync(join(tmpdir(), "lithe-gradle-test-"));
 const root = join(scratch, "multi");
+// A test owns its Gradle state and daemons, including when a command times out.
+// Stopping this user home cannot terminate a developer's unrelated Gradle build.
+const gradleUserHome = join(scratch, "gradle-home");
+
+async function execute(root, argv, { quiet = false, timeout = COMMAND_TIMEOUT_MS } = {}) {
+  const started = performance.now();
+  await new Promise((resolve, reject) => {
+    const child = spawn(gradle, argv, {
+      cwd: root,
+      env: { ...process.env, GRADLE_USER_HOME: gradleUserHome },
+      detached: process.platform !== "win32",
+      stdio: ["ignore", "ignore", quiet ? "ignore" : "inherit"],
+    });
+    let timedOut = false;
+    let interrupted = false;
+    let forceKill;
+    const kill = (signal) => {
+      if (!child.pid) return;
+      try {
+        if (process.platform === "win32") child.kill(signal);
+        else process.kill(-child.pid, signal);
+      } catch (error) {
+        if (error.code !== "ESRCH") reject(error);
+      }
+    };
+    const terminate = () => {
+      kill("SIGTERM");
+      forceKill ??= setTimeout(() => kill("SIGKILL"), CLEANUP_TIMEOUT_MS);
+    };
+    const interrupt = () => {
+      interrupted = true;
+      terminate();
+    };
+    process.once("SIGINT", interrupt);
+    process.once("SIGTERM", interrupt);
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      terminate();
+    }, timeout);
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      clearTimeout(deadline);
+      clearTimeout(forceKill);
+      // A timed-out launcher may exit before its child daemon has stopped.
+      if (timedOut || interrupted) kill("SIGKILL");
+      process.off("SIGINT", interrupt);
+      process.off("SIGTERM", interrupt);
+      const label = argv.join(" ");
+      if (timedOut) reject(new Error(`Gradle timed out after ${timeout}ms: ${label}`));
+      else if (interrupted) reject(new Error(`Gradle interrupted: ${label}`));
+      else if (code !== 0) reject(new Error(`Gradle exited ${code ?? signal}: ${label}`));
+      else resolve();
+    });
+  });
+  console.log(`Gradle command completed in ${((performance.now() - started) / 1000).toFixed(2)}s: ${argv.at(-1)}`);
+}
+
+async function run(root, list, values = {}, extra = SINGLE_USE) {
+  const argv = [...extra, ...expand(buildSystem.invocation.globalArguments, values), ...expand(list, values)];
+  await execute(root, argv);
+}
 const captureDir = process.env.LITHE_CAPTURE_DIR;
 function capture(name, file) {
   if (!captureDir) return;
@@ -82,11 +141,22 @@ function capture(name, file) {
   mkdirSync(captureDir, { recursive: true });
   writeFileSync(join(captureDir, name), text);
 }
+function packageSnapshot(directory = pluginDir, prefix = "") {
+  return readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    const name = `${prefix}${entry.name}`;
+    return entry.isDirectory()
+      ? [[`${name}/`, null], ...packageSnapshot(path, `${name}/`)]
+      : [[name, createHash("sha256").update(readFileSync(path)).digest("hex")]];
+  });
+}
+const packageBefore = packageSnapshot();
 let failed = false;
-const check = (name, body) => {
+const check = async (name, body) => {
+  const started = performance.now();
   try {
-    body();
-    console.log(`✓ ${name}`);
+    await body();
+    console.log(`✓ ${name} (${((performance.now() - started) / 1000).toFixed(2)}s)`);
   } catch (error) {
     failed = true;
     console.error(`✗ ${name}\n${error.stack}`);
@@ -97,13 +167,13 @@ try {
   cpSync(resolve("test", "fixtures", "multi"), root, { recursive: true });
 
   const modelFile = join(scratch, "model.json");
-  run(root, buildSystem.model.arguments, { outputFile: modelFile }, STRICT);
+  await run(root, buildSystem.model.arguments, { outputFile: modelFile }, STRICT);
   capture("model.json", modelFile);
   const model = JSON.parse(readFileSync(modelFile, "utf8"));
   const byName = (name) => model.projects.find((project) => project.name === name);
   const task = (project, name) => model.tasks.find((entry) => entry.project === byName(project).path && entry.name === name);
 
-  check("the model lists every project with its Gradle path", () => {
+  await check("the model lists every project with its Gradle path", () => {
     assert.equal(model.format, "litheBuildModel");
     assert.deepEqual(model.projects.map((project) => project.name), ["multi", "app", "core"]);
     assert.equal(byName("core").parent, byName("multi").path);
@@ -111,7 +181,7 @@ try {
     assert.deepEqual(byName("core").properties, { path: ":core", taskPrefix: ":core:", group: "demo", version: "1.0.0" });
   });
 
-  check("tasks are filed under their Gradle group and run by path", () => {
+  await check("tasks are filed under their Gradle group and run by path", () => {
     assert.deepEqual(task("core", "test").category, ["Tasks", "verification"]);
     assert.deepEqual(task("core", "compileJava").category, ["Tasks", "other"]);
     assert.equal(task("core", "build").properties.path, ":core:build");
@@ -121,13 +191,13 @@ try {
     assert.ok(!model.tasks.some((entry) => entry.name.startsWith("lithe")), "Lithe's own tasks are hidden");
   });
 
-  check("JavaExec tasks are applications the run entries pick up", () => {
+  await check("JavaExec tasks are applications the run entries pick up", () => {
     assert.equal(task("app", "run").execution, "application");
     assert.equal(task("app", "run").properties.path, ":app:run");
     assert.equal(task("core", "test").execution, undefined);
   });
 
-  check("source sets become content roots", () => {
+  await check("source sets become content roots", () => {
     const core = byName("core").path;
     const kinds = model.contentRoots.filter((entry) => entry.project === core).map((entry) => [entry.kind, entry.path]);
     for (const expected of [
@@ -143,9 +213,9 @@ try {
   });
 
   const projectDependencies = join(scratch, "app-dependencies.json");
-  run(root, buildSystem.dependencies.arguments, { outputFile: projectDependencies, project: byName("app") }, STRICT);
+  await run(root, buildSystem.dependencies.arguments, { outputFile: projectDependencies, project: byName("app") }, STRICT);
   capture("app-dependencies.json", projectDependencies);
-  check("a project's tree lists its classpaths with the sibling project", () => {
+  await check("a project's tree lists its classpaths with the sibling project", () => {
     const tree = JSON.parse(readFileSync(projectDependencies, "utf8"));
     assert.equal(tree.format, "litheDependencies");
     assert.deepEqual(tree.dependencies.map((node) => node.name), [
@@ -160,9 +230,9 @@ try {
   });
 
   const workspaceDependencies = join(scratch, "dependencies.json");
-  run(root, buildSystem.dependencies.arguments, { outputFile: workspaceDependencies }, STRICT);
+  await run(root, buildSystem.dependencies.arguments, { outputFile: workspaceDependencies }, STRICT);
   capture("dependencies.json", workspaceDependencies);
-  check("the workspace tree has one node per project with transitive children", () => {
+  await check("the workspace tree has one node per project with transitive children", () => {
     const tree = JSON.parse(readFileSync(workspaceDependencies, "utf8"));
     assert.deepEqual(tree.dependencies.map((node) => node.name), ["multi", "app", "core"]);
     const core = tree.dependencies[2];
@@ -172,35 +242,38 @@ try {
     assert.equal(junit.children[0].name, "hamcrest-core");
   });
 
-  check("an unknown project fails instead of writing an empty tree", () => {
+  await check("an unknown project fails instead of writing an empty tree", async () => {
     const missing = { properties: { path: ":missing" } };
-    assert.throws(() =>
-      execFileSync(gradle, [...SINGLE_USE, ...expand(buildSystem.dependencies.arguments, { outputFile: join(scratch, "x.json"), project: missing })], {
-        cwd: root,
-        stdio: "ignore",
-      }),
+    await assert.rejects(
+      execute(root, [...SINGLE_USE, ...expand(buildSystem.dependencies.arguments, { outputFile: join(scratch, "x.json"), project: missing })], { quiet: true }),
+      /Gradle exited 1:/,
     );
+    assert.ok(!existsSync(join(scratch, "x.json")), "the failed command wrote no document");
   });
 
-  check("reading the model and dependencies builds nothing", () => {
+  await check("reading the model and dependencies builds nothing", () => {
     for (const directory of ["build", "core/build", "app/build"]) {
       assert.ok(!existsSync(join(root, directory)), `${directory} was not created`);
     }
   });
 
-  run(root, buildSystem.test.arguments, { project: byName("core"), suite: "demo.core.GreeterTest" });
-  check("a filtered test run writes the report the results glob reads", () => {
+  await run(root, buildSystem.test.arguments, { project: byName("core"), suite: "demo.core.GreeterTest" });
+  await check("a filtered test run writes the report the results glob reads", () => {
     const report = readFileSync(join(root, "core", "build", "test-results", "test", "TEST-demo.core.GreeterTest.xml"), "utf8");
     assert.match(report, /<testsuite[^>]*name="demo\.core\.GreeterTest"[^>]*tests="2"/);
   });
 
-  check("without Lithe's properties the init script does nothing", () => {
-    execFileSync(gradle, [...STRICT, "-q", "--no-configuration-cache", "--init-script", join(pluginDir, "lithe.init.gradle"), "help"], {
-      cwd: root,
-      stdio: ["ignore", "ignore", "inherit"],
-    });
+  await check("without Lithe's properties the init script does nothing", async () => {
+    await execute(root, [...STRICT, "-q", "--no-configuration-cache", "--init-script", join(pluginDir, "lithe.init.gradle"), "help"]);
+  });
+  await check("the packaged plugin stays byte-identical after the workflow", () => {
+    assert.deepEqual(packageSnapshot(), packageBefore);
   });
 } finally {
-  rmSync(scratch, { recursive: true, force: true });
+  try {
+    await execute(root, ["--stop"], { timeout: 15_000 });
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 }
 process.exit(failed ? 1 : 0);

@@ -1,9 +1,9 @@
 name: Release
 
 # Push a tag v<version> matching plugin.json to publish a GitHub Release.
-# Lithe Store's tracker picks up the release and opens an index pull request.
-# A tag with a pre-release suffix is not used; mark a trial release as a
-# pre-release in the GitHub UI after it is published.
+# v0.1.0 is a trial release for the preview buildSystems API; publish it as a
+# pre-release immediately. Store listing needs a separate index pull request;
+# its stable-release tracker does not automatically list this pre-release.
 on:
   push:
     tags: ["v*"]
@@ -42,11 +42,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "安装：在 Lithe 的插件市场（已预置 Lithe Store 源 https://github.com/Lithe-IDEA/Lithe-store）搜索 Gradle。"
+            echo "为 Lithe 提供 Gradle 项目、任务分组、JavaExec 应用运行、筛选测试、编译诊断与依赖树。"
+            echo
+            if [[ "$GITHUB_REF_NAME" == "v0.1.0" ]]; then
+              echo "试用版：需要兼容 buildSystems 插件 API 3 的 Lithe preview 开发版；工具窗口由 macOS 宿主原生绘制。"
+              echo
+            fi
+            echo "要求 Gradle 7.6+（项目 Wrapper、GRADLE_HOME 或 PATH）及该 Gradle 版本支持的 Java。插件不附带 Gradle。"
+            echo
+            echo "安装：Lithe Store 收录后可在插件市场搜索 Gradle；也可在 Lithe 开发版中从磁盘安装本页 ZIP。"
             echo
             echo "SHA-256："
             echo '```'
             sed 's#^dist/##' "$RUNNER_TEMP/checksums.txt"
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "Gradle $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+          release_flags=()
+          if [[ "$GITHUB_REF_NAME" == "v0.1.0" ]]; then
+            release_flags+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "Gradle $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" "${release_flags[@]}"

@@ -3,7 +3,8 @@
 为 [Lithe](https://github.com/Lithe-IDEA/Lithe-IDEA) 提供 Gradle 项目支持：识别 Gradle 构建，在 Gradle 工具窗口里像
 IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、应用和测试。
 这是一个**社区插件**，用 Lithe 的声明式构建系统接口（插件 API 3 的 `buildSystems`）实现，
-只带一个 Gradle 初始化脚本，没有任何宿主代码。
+只带一个 Gradle 初始化脚本，没有任何宿主代码。工具窗口由 macOS 宿主用 SwiftUI 原生渲染，插件不提供 Web 入口；
+`languageImport` 把 Offline 和 Gradle User Home 选项传给 Java 语言服务器的 Gradle 导入。
 
 > English: Gradle support for Lithe through the declarative `buildSystems` plugin API — projects with their tasks by
 > group, JavaExec tasks as run entries, test runs with JUnit reports, compiler diagnostics and per-configuration
@@ -52,7 +53,9 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 
 ## 安装
 
-在 Lithe 中打开 **设置 → 插件 → 插件市场**，搜索 “Gradle”，安装并按提示重启。
+`v0.1.0` 是预发布版本，需要兼容 `buildSystems` 插件 API 3 的 Lithe preview 开发版。
+Lithe Store 条目合并后，可在 **设置 → 插件 → 插件市场** 搜索 “Gradle”，安装并按提示重启；
+条目合并前可下载 Release 的 ZIP，从 Lithe 开发版的 **⚙ → 从磁盘安装插件…** 安装。
 Lithe 已预置 Lithe Store 社区插件源；如果你之前移除了它，先在 **⚙ → 管理插件仓库…** 中重新添加
 `https://github.com/Lithe-IDEA/Lithe-store`。
 
@@ -67,7 +70,7 @@ io.github.lithe-idea.gradle-build/icons/              # 工具窗口和工具栏
 test/fixtures/multi/                                  # 两个子项目的示例构建，供集成测试使用
 scripts/package.mjs                                   # 打包成 dist/gradle-build-<版本>-darwin.zip
 scripts/test.mjs                                      # 用真实 Gradle 运行清单里的命令并检查输出
-.github/workflows/ci.yml                              # PR 时打包、用 Gradle 7.6.4 和 9.6.1 测试，并用 Lithe Store 的规则检查
+.github/workflows/ci.yml                              # PR 时打包、用 Gradle 7.6 和 9.6.1 测试，并用 Lithe Store 的规则检查
 .github/workflows/release.yml                         # 推送 v<版本> 标签时发布 GitHub Release
 ```
 
@@ -81,8 +84,10 @@ node scripts/package.mjs
 GRADLE=/path/to/gradle node scripts/test.mjs
 ```
 
-测试的每次 Gradle 运行都使用 `--no-daemon`，不会留下守护进程；初始化脚本自己的运行还带 `--warning-mode=fail`，
-出现弃用警告即失败。在 Lithe 开发版中，通过 **设置 → 插件 → ⚙ → 从磁盘安装插件…** 选择
+测试使用临时工作区和独立的 Gradle User Home，每个 Gradle 命令最多运行 120 秒，结束时有界停止该测试的守护进程并清理临时目录。
+每次运行都使用 `--no-daemon`；初始化脚本自己的运行还带 `--warning-mode=fail`，出现弃用警告即失败。
+输出记录命令和每项断言的耗时，并检查运行前后插件包的文件清单与 SHA-256 保持不变。
+在 Lithe 开发版中，通过 **设置 → 插件 → ⚙ → 从磁盘安装插件…** 选择
 `dist/package/io.github.lithe-idea.gradle-build` 即可安装本地开发包（发行版 Lithe 不加载未签名的开发包）。
 
 `plugin.json` 的完整格式见 Lithe 的
@@ -98,8 +103,8 @@ GRADLE=/path/to/gradle node scripts/test.mjs
    git tag v0.2.0 && git push origin v0.2.0
    ```
 
-3. `Release` 工作流会核对标签与版本、打包、测试并发布 Release（说明里附 SHA-256）。
-4. Lithe Store 的自动追踪会发现新版本并开合并请求，合并后用户即可在 Lithe 中更新。
+3. `Release` 工作流会核对标签与版本、打包、测试并发布 Release（说明里附 SHA-256）；`v0.1.0` 会直接标为预发布。
+4. `v0.1.0` 预发布需要单独提交 Lithe Store 条目合并请求；后续稳定版可由 Store 自动追踪并开合并请求，合并后用户即可在 Lithe 中更新。
 
 ## 许可
 

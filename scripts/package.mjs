@@ -58,5 +58,5 @@ assertNoLinks(packageRoot);
 const asset = resolve("dist", `${ASSET_PREFIX}-${manifest.version}-${PLATFORM}.zip`);
 // -X drops extra file attributes; -y stores a symbolic link as a link so
 // Lithe refuses it instead of the archive silently carrying its target.
-execFileSync("zip", ["-qrXy", asset, PACKAGE_DIR, "-x", "*.DS_Store"], { cwd: PACKAGE_ROOT });
+execFileSync("zip", ["-qrXy", asset, PACKAGE_DIR, "-x", "*.DS_Store"], { cwd: PACKAGE_ROOT, timeout: 30_000 });
 console.log(`dist/${ASSET_PREFIX}-${manifest.version}-${PLATFORM}.zip ${sha256(asset)}`);
