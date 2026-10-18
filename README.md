@@ -53,7 +53,7 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 
 ## 安装
 
-`v0.1.0` 是预发布版本，需要兼容 `buildSystems` 插件 API 3 的 Lithe preview 开发版。
+`v0.1.1` 修复重复运行测试时报告显示为零的问题，需要兼容 `buildSystems` 插件 API 3 的 Lithe preview 开发版。
 Lithe Store 条目合并后，可在 **设置 → 插件 → 插件市场** 搜索 “Gradle”，安装并按提示重启；
 条目合并前可下载 Release 的 ZIP，从 Lithe 开发版的 **⚙ → 从磁盘安装插件…** 安装。
 Lithe 已预置 Lithe Store 社区插件源；如果你之前移除了它，先在 **⚙ → 管理插件仓库…** 中重新添加
