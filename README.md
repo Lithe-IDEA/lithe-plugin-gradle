@@ -1,6 +1,6 @@
 # Gradle for Lithe
 
-为 [Lithe](https://github.com/Lithe-IDEA/Lithe-IDEA) 提供 Gradle 项目支持：识别 Gradle 构建，在 Gradle 工具窗口里像
+为 [Lithe](https://github.com/1lck/Lithe-IDEA) 提供 Gradle 项目支持：识别 Gradle 构建，在 Gradle 工具窗口里像
 IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、应用和测试。
 这是一个**社区插件**，用 Lithe 的声明式构建系统接口（插件 API 3 的 `buildSystems`）实现，
 只带一个 Gradle 初始化脚本，没有任何宿主代码。工具窗口由 macOS 宿主用 SwiftUI 原生渲染，插件不提供 Web 入口；
@@ -93,7 +93,7 @@ GRADLE=/path/to/gradle node scripts/test.mjs
 `dist/package/io.github.lithe-idea.gradle-build` 即可安装本地开发包（发行版 Lithe 不加载未签名的开发包）。
 
 `plugin.json` 的完整格式见 Lithe 的
-[插件契约](https://github.com/Lithe-IDEA/Lithe-IDEA/blob/preview/shared/contracts/plugins/v1/README.md)
+[插件契约](https://github.com/1lck/Lithe-IDEA/blob/preview/shared/contracts/plugins/v1/README.md)
 和 Lithe Store 的[构建工具接入指南](https://github.com/Lithe-IDEA/Lithe-store/blob/main/docs/build-tool-integration.md)。
 
 ## 发布新版本
