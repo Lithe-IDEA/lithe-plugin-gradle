@@ -103,6 +103,15 @@ GRADLE=/path/to/gradle node scripts/test.mjs
 记录到当前会话的 `run` 通道；Gradle 的编译输出和测试报告继续留在 Build Output 与测试界面。
 模型与依赖树 JSON 是工作流数据，不是日志，仍通过宿主提供的临时输出文件返回。
 
+模型导出和依赖树命令同样由宿主执行。宿主替插件把每次执行记成与 SDK 插件同一组的操作事实，写入
+`plugins/io.github.lithe-idea.gradle-build/host` 通道，操作名为 `lithe/build/model` 和
+`lithe/build/dependencies`（与由插件后端提供时的请求名相同）：结果成功解码记
+`plugins.operation.finished`（INFO，含耗时）；失败记 `plugins.operation.failed`（ERROR），失败码只取自
+执行阶段——`host.planFailed`（无法生成命令计划）、`host.executableUnavailable`（无法解析 Gradle 或
+wrapper）、`host.launchFailed`（进程拉起失败）、`host.timedOut`（超时）、`host.commandFailed`（命令失败
+退出）、`host.outputInvalid`（输出文件无法解码）。取消和被新请求取代的结果不记录；事实不含 Gradle 输出、
+路径或命令行。插件不需要任何日志代码，宿主实现见 https://github.com/1lck/Lithe-IDEA/pull/1720。
+
 排障时使用 Lithe 的独立日志窗口和诊断导出。不启用 Gradle `--debug` 来复制环境、凭据、
 完整命令行或构建正文，也不将 Gradle User Home、daemon 状态或输出文件迁入日志目录。
 Windows 的日志实现仍为 v1；本文没有声明 Windows 已完成 v2 验收。
