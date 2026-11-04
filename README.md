@@ -96,6 +96,17 @@ GRADLE=/path/to/gradle node scripts/test.mjs
 [插件契约](https://github.com/Lithe-IDEA/lithe-plugin-docs/blob/main/contract/v1/README.md)
 和[构建工具接入指南](https://github.com/Lithe-IDEA/lithe-plugin-docs/blob/main/guides/build-tool-integration.md)。
 
+## 诊断日志
+
+此插件只声明 Gradle 命令及模型导出脚本，没有独立的常驻后端或日志 writer。
+启用结构化日志 v2 的 Lithe macOS preview 由宿主将构建、运行与测试的进程终态、退出码和耗时
+记录到当前会话的 `run` 通道；Gradle 的编译输出和测试报告继续留在 Build Output 与测试界面。
+模型与依赖树 JSON 是工作流数据，不是日志，仍通过宿主提供的临时输出文件返回。
+
+排障时使用 Lithe 的独立日志窗口和诊断导出。不启用 Gradle `--debug` 来复制环境、凭据、
+完整命令行或构建正文，也不将 Gradle User Home、daemon 状态或输出文件迁入日志目录。
+Windows 的日志实现仍为 v1；本文没有声明 Windows 已完成 v2 验收。
+
 ## 发布新版本
 
 1. 修改 `plugin.json` 的 `version`（例如 `0.2.0`），合入 `main`。
