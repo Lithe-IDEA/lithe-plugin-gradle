@@ -27,6 +27,12 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 | 内容根 | source set 的 Java/Kotlin/Groovy/Scala 源码、资源和注解处理器生成目录；`build` 与 `.gradle` 标为排除 |
 | 同步 | 构建脚本、`gradle.properties`、`gradle/libs.versions.toml`、Wrapper 配置变化后重新读取项目 |
 
+## 新建项目
+
+插件在 New Project 窗口提供 “Gradle” 条目，生成一个 Gradle Java 项目：可选 Kotlin 或 Groovy DSL、JDK、是否添加示例代码，
+以及 GroupId 和 ArtifactId。模板在 `io.github.lithe-idea.gradle-build/templates/java/`，从 Java Support 插件移来，
+生成的文件与原来相同。条目要求 `java` 语言和 `gradle` 构建系统同时可用，所以生成的项目需要安装 Java Support 插件提供 Java 语言支持。
+
 ## 依赖的程序
 
 插件不带 Gradle，使用你项目或电脑上的 Gradle，按以下顺序查找：
@@ -67,6 +73,7 @@ Lithe 已预置 Lithe Store 社区插件源；如果你之前移除了它，先�
 io.github.lithe-idea.gradle-build/plugin.json         # 插件描述，目录名必须等于插件 id
 io.github.lithe-idea.gradle-build/lithe.init.gradle   # 初始化脚本，导出模型和依赖树
 io.github.lithe-idea.gradle-build/icons/              # 工具窗口和工具栏图标（来源见 NOTICE）
+io.github.lithe-idea.gradle-build/templates/java/     # New Project 的 Gradle Java 项目模板（Kotlin/Groovy DSL、示例代码）
 test/fixtures/multi/                                  # 两个子项目的示例构建，供集成测试使用
 scripts/package.mjs                                   # 打包成 dist/gradle-build-<版本>-darwin.zip
 scripts/test.mjs                                      # 用真实 Gradle 运行清单里的命令并检查输出

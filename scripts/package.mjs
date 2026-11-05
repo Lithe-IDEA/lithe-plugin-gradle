@@ -2,8 +2,9 @@
 // Packages the plugin into dist/<name>-<version>-darwin.zip, the asset name
 // Lithe Store's release tracker recognizes (docs/publishing.md there).
 //
-// The package is plain data: plugin.json, icons, and the init script that
-// runs inside the user's own Gradle, so one archive serves every Mac. The
+// The package is plain data: plugin.json, icons, New Project templates, and
+// the init script that runs inside the user's own Gradle, so one archive
+// serves every Mac. The
 // unpacked package stays in dist/package/ for installing a local
 // development copy into Lithe.
 //
@@ -11,13 +12,27 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, lstatSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { cpSync, lstatSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { isAbsolute, join, resolve } from "node:path";
 
 const PACKAGE_DIR = "io.github.lithe-idea.gradle-build";
 const ASSET_PREFIX = "gradle-build";
 const PLATFORM = "darwin";
 const PACKAGE_ROOT = join("dist", "package");
+
+/**
+ * Why `path` is not an existing `kind` ("icon file" or "template directory")
+ * inside the plugin package, or undefined when it is one. Absolute paths and
+ * `..` segments are refused because the package is copied and zipped as is.
+ */
+function packageEntryProblem(path, kind) {
+  if (typeof path !== "string" || path === "" || isAbsolute(path) || path.split(/[\\/]/).includes("..")) {
+    return `${kind} ${path} must be a relative path inside the package`;
+  }
+  const stat = statSync(join(PACKAGE_DIR, path), { throwIfNoEntry: false });
+  const found = kind === "template directory" ? stat?.isDirectory() : stat?.isFile();
+  return found ? undefined : `missing ${kind} ${path}`;
+}
 
 const manifest = JSON.parse(readFileSync(`${PACKAGE_DIR}/plugin.json`, "utf8"));
 const problems = [];
@@ -31,6 +46,22 @@ if (tagFlag >= 0) {
   const tag = process.argv[tagFlag + 1];
   if (tag !== `v${manifest.version}`) problems.push(`tag ${tag} does not match plugin.json version ${manifest.version} (expected v${manifest.version})`);
 }
+
+// New Project entries point at icons and template directories by path; a typo
+// there would only surface when a user opens the New Project window.
+for (const generator of manifest.projectGenerators ?? []) {
+  const entries = [];
+  if (generator.icon?.path !== undefined) entries.push(["icon file", generator.icon.path]);
+  if (generator.icon?.darkPath !== undefined) entries.push(["icon file", generator.icon.darkPath]);
+  for (const step of generator.steps ?? []) {
+    if (step.source !== undefined) entries.push(["template directory", step.source]);
+  }
+  for (const [kind, path] of entries) {
+    const problem = packageEntryProblem(path, kind);
+    if (problem !== undefined) problems.push(`generator ${generator.id}: ${problem}`);
+  }
+}
+
 if (problems.length > 0) {
   for (const problem of problems) console.error(`✗ ${problem}`);
   process.exit(1);
