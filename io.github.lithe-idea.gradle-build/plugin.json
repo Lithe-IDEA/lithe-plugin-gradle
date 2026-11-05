@@ -4,13 +4,13 @@
   "displayName": "Gradle",
   "version": "0.1.1",
   "pluginAPIVersion": 3,
-  "requires": { "buildSystems": 1 },
+  "requires": { "buildSystems": 1, "projectGenerators": 1 },
   "vendor": {
     "id": "io.github.lithe-idea",
     "displayName": "Lithe Community",
     "signatureRequirement": "none"
   },
-  "permissions": ["process.build"],
+  "permissions": ["process.build", "project.generate"],
   "activationEvents": ["onBuildSystem:gradle"],
   "languages": [],
   "buildSystems": [
@@ -172,6 +172,80 @@
       },
       "layout": { "excluded": [".gradle", "build"] },
       "languageImport": { "kind": "gradle", "options": { "offline": "offline", "gradleUserHome": "gradleUserHome" } }
+    }
+  ],
+  "projectGenerators": [
+    {
+      "id": "gradle-java",
+      "displayName": "Gradle",
+      "description": "A Java project built with Gradle.",
+      "section": "project",
+      "order": 30,
+      "icon": { "path": "icons/gradle.svg" },
+      "fields": [
+        {
+          "id": "gradleDsl",
+          "type": "enum",
+          "title": "Gradle DSL",
+          "presentation": "segmented",
+          "options": [
+            { "value": "kotlin", "title": "Kotlin" },
+            { "value": "groovy", "title": "Groovy" }
+          ]
+        },
+        {
+          "id": "jdk",
+          "type": "runtime",
+          "title": "JDK",
+          "runtime": "java",
+          "minimumVersion": "11"
+        },
+        {
+          "id": "addSampleCode",
+          "type": "boolean",
+          "title": "Add sample code",
+          "default": true
+        },
+        {
+          "id": "groupId",
+          "type": "text",
+          "title": "GroupId",
+          "description": "Usually the reversed domain name of your organization, such as com.example.",
+          "advanced": true,
+          "default": "org.example",
+          "pattern": "[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*",
+          "maxLength": 200
+        },
+        {
+          "id": "artifactId",
+          "type": "text",
+          "title": "ArtifactId",
+          "description": "The name of the artifact the build produces.",
+          "advanced": true,
+          "default": "${project.name}",
+          "pattern": "[A-Za-z0-9_][A-Za-z0-9_.-]*",
+          "maxLength": 200
+        }
+      ],
+      "requirements": [{ "languageID": "java" }, { "buildSystemID": "gradle" }],
+      "steps": [
+        { "kind": "files", "source": "templates/java/gradle-kotlin", "when": { "field": "gradleDsl", "equals": "kotlin" } },
+        { "kind": "files", "source": "templates/java/gradle-groovy", "when": { "field": "gradleDsl", "equals": "groovy" } },
+        { "kind": "files", "source": "templates/java/standard-sample", "when": { "field": "addSampleCode", "equals": true } },
+        {
+          "kind": "files",
+          "source": "templates/java/standard-sample-main",
+          "target": "src/main/java/${field.groupId|package|path}",
+          "when": { "field": "addSampleCode", "equals": true }
+        },
+        { "kind": "files", "source": "templates/java/standard-empty", "when": { "field": "addSampleCode", "equals": false } }
+      ],
+      "openFiles": [
+        {
+          "path": "src/main/java/${field.groupId|package|path}/Main.java",
+          "when": { "field": "addSampleCode", "equals": true }
+        }
+      ]
     }
   ]
 }
