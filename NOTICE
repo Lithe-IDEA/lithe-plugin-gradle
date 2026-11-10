@@ -12,5 +12,10 @@ Version 2.0, at revision 158b854d47ac9af2bbd99c0d7c354a5875cb6f81:
 
 Copyright 2000-2023 JetBrains s.r.o. and contributors.
 
+The official Java SDK sources in vendor/lithe-plugin-sdk-java/ come from
+Lithe-IDEA/lithe-plugin-docs at the revision pinned in sdk.lock.json (some with
+local changes recorded there), licensed under the Apache License, Version 2.0.
+They are compiled into lib/lithe-gradle-backend.jar.
+
 Gradle is a trademark of Gradle, Inc. This plugin is not affiliated with or
 endorsed by Gradle, Inc.

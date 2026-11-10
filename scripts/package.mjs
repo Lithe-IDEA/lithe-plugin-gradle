@@ -3,16 +3,17 @@
 // Lithe Store's release tracker recognizes (docs/publishing.md there).
 //
 // The package is plain data: plugin.json, icons, New Project templates, and
-// the init script that runs inside the user's own Gradle, so one archive
-// serves every Mac. The
+// the init script that runs inside the user's own Gradle, and the Java backend
+// jar (lib/lithe-gradle-backend.jar), so one archive serves every Mac. The
 // unpacked package stays in dist/package/ for installing a local
 // development copy into Lithe.
 //
 // Usage: node scripts/package.mjs [--expect-tag <tag>]
 
 import { execFileSync } from "node:child_process";
+import { verifySdk } from "./sdk/verify-sdk.mjs";
 import { createHash } from "node:crypto";
-import { cpSync, lstatSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
 const PACKAGE_DIR = "io.github.lithe-idea.gradle-build";
@@ -79,9 +80,32 @@ function assertNoLinks(directory) {
   }
 }
 
+// The backend (backend/) and the vendored official Java SDK (vendor/, pinned by
+// sdk.lock.json) are compiled together for Java 8 with the JDK's own javac and
+// jar, so building needs no Maven. A fixed timestamp makes the jar reproducible.
+await verifySdk();
+const BACKEND_BUILD = join("backend", "target");
+const BACKEND_JAR = join(BACKEND_BUILD, "lithe-gradle-backend.jar");
+function sourcesUnder(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? sourcesUnder(path) : entry.name.endsWith(".java") ? [path] : [];
+  });
+}
+rmSync(BACKEND_BUILD, { recursive: true, force: true });
+mkdirSync(join(BACKEND_BUILD, "classes"), { recursive: true });
+const javaSources = [...sourcesUnder("backend/src/main/java"), ...sourcesUnder("vendor/lithe-plugin-sdk-java/src/main/java")];
+execFileSync("javac", ["-encoding", "UTF-8", "--release", "8", "-Xlint:-options", "-d", join(BACKEND_BUILD, "classes"), ...javaSources], { stdio: "inherit", timeout: 120_000 });
+writeFileSync(join(BACKEND_BUILD, "MANIFEST.MF"), `Main-Class: io.github.litheidea.gradle.backend.GradleBackend\nImplementation-Version: ${manifest.version}\n`);
+execFileSync("jar", ["--create", "--file", BACKEND_JAR, "--manifest", join(BACKEND_BUILD, "MANIFEST.MF"), "--date", "2026-10-20T00:00:00Z", "-C", join(BACKEND_BUILD, "classes"), "."], { stdio: "inherit", timeout: 60_000 });
+if (!existsSync(BACKEND_JAR)) throw new Error(`${BACKEND_JAR} was not built`);
+
 rmSync("dist", { recursive: true, force: true });
 const packageRoot = join(PACKAGE_ROOT, PACKAGE_DIR);
 cpSync(PACKAGE_DIR, packageRoot, { recursive: true });
+mkdirSync(join(packageRoot, "lib"), { recursive: true });
+cpSync(BACKEND_JAR, join(packageRoot, "lib", "lithe-gradle-backend.jar"));
+cpSync("vendor/LICENSE", join(packageRoot, "SDK-LICENSE"));
 cpSync("LICENSE", join(packageRoot, "LICENSE"));
 cpSync("NOTICE", join(packageRoot, "NOTICE"));
 assertNoLinks(packageRoot);
