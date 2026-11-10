@@ -4,7 +4,7 @@
 IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、应用和测试。
 这是一个**社区插件**，用 Lithe 的声明式构建系统接口（插件 API 3 的 `buildSystems`）实现，
 只带一个 Gradle 初始化脚本，没有任何宿主代码。工具窗口由 macOS 宿主用 SwiftUI 原生渲染，插件不提供 Web 入口；
-`languageImport` 把 Offline 和 Gradle User Home 选项传给 Java 语言服务器的 Gradle 导入。
+插件另带一个很小的 Node 后端，向 Java Support 提供 Gradle 的导入设置（见下文“Java 语言服务器的导入设置”）。
 
 > English: Gradle support for Lithe through the declarative `buildSystems` plugin API — projects with their tasks by
 > group, JavaExec tasks as run entries, test runs with JUnit reports, compiler diagnostics and per-configuration
@@ -33,6 +33,22 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 以及 GroupId 和 ArtifactId。模板在 `io.github.lithe-idea.gradle-build/templates/java/`，从 Java Support 插件移来，
 生成的文件与原来相同。条目要求 `java` 语言和 `gradle` 构建系统同时可用，所以生成的项目需要安装 Java Support 插件提供 Java 语言支持。
 
+## Java 语言服务器的导入设置
+
+旧版清单里的 `buildSystems[].languageImport` 已从插件契约删除。现在 Gradle 插件导出插件函数 `languageImport.settings`
+（版本 1，`context: "workspace"`），Java Support 在启动 JDT LS 前调用它，只接受 `java.import.gradle.` 等白名单前缀内的键。
+后端只读取工作区里的文件，不运行 Gradle、不写任何文件：
+
+| 来源 | 导出的键 |
+| --- | --- |
+| 环境变量 `GRADLE_USER_HOME`（绝对路径） | `java.import.gradle.user.home` |
+| `gradle.properties` 的 `org.gradle.java.home`（绝对路径） | `java.import.gradle.java.home` |
+| `gradle.properties` 的 `org.gradle.jvmargs` | `java.import.gradle.jvmArguments` |
+
+`gradle.properties` 先读 Gradle User Home 里的，再读项目根的，项目根优先。`workspaceRoot` 必须落在已打开的本地工作区文件夹内，
+否则函数拒绝（`gradle.invalidRoot`）。工具栏的 Offline 与 Gradle User Home 选项只保存在宿主里，插件后端读不到，
+所以它们不再传给 JDT LS，需要宿主把已存选项交给插件函数后才能恢复。后端需要 Node.js 20.3 或更新版本。
+
 ## 依赖的程序
 
 插件不带 Gradle，使用你项目或电脑上的 Gradle，按以下顺序查找：
@@ -59,7 +75,7 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 
 ## 安装
 
-`v0.1.1` 修复重复运行测试时报告显示为零的问题，需要兼容 `buildSystems` 插件 API 3 的 Lithe preview 开发版。
+`v0.1.2` 移除宿主已删除的 `languageImport` 字段并改用插件函数提供导入设置；`v0.1.1` 修复重复运行测试时报告显示为零的问题。均需要兼容 `buildSystems` 插件 API 3 的 Lithe preview 开发版。
 Lithe Store 条目合并后，可在 **设置 → 插件 → 插件市场** 搜索 “Gradle”，安装并按提示重启；
 条目合并前可下载 Release 的 ZIP，从 Lithe 开发版的 **⚙ → 从磁盘安装插件…** 安装。
 Lithe 已预置 Lithe Store 社区插件源；如果你之前移除了它，先在 **⚙ → 管理插件仓库…** 中重新添加
@@ -72,6 +88,7 @@ Lithe 已预置 Lithe Store 社区插件源；如果你之前移除了它，先�
 ```text
 io.github.lithe-idea.gradle-build/plugin.json         # 插件描述，目录名必须等于插件 id
 io.github.lithe-idea.gradle-build/lithe.init.gradle   # 初始化脚本，导出模型和依赖树
+io.github.lithe-idea.gradle-build/backend/            # languageImport.settings 后端（Node）和固定版本的官方 SDK（sdk.lock.json）
 io.github.lithe-idea.gradle-build/icons/              # 工具窗口和工具栏图标（来源见 NOTICE）
 io.github.lithe-idea.gradle-build/templates/java/     # New Project 的 Gradle Java 项目模板（Kotlin/Groovy DSL、示例代码）
 test/fixtures/multi/                                  # 两个子项目的示例构建，供集成测试使用
@@ -105,7 +122,7 @@ GRADLE=/path/to/gradle node scripts/test.mjs
 
 ## 诊断日志
 
-此插件只声明 Gradle 命令及模型导出脚本，没有独立的常驻后端或日志 writer。
+此插件的 Gradle 命令及模型导出脚本由宿主执行，后端只在 Java Support 调用 `languageImport.settings` 时启动，用官方 SDK 自动记录该函数的结构化操作事实（不含路径和属性值）。
 启用结构化日志 v2 的 Lithe macOS preview 由宿主将构建、运行与测试的进程终态、退出码和耗时
 记录到当前会话的 `run` 通道；Gradle 的编译输出和测试报告继续留在 Build Output 与测试界面。
 模型与依赖树 JSON 是工作流数据，不是日志，仍通过宿主提供的临时输出文件返回。

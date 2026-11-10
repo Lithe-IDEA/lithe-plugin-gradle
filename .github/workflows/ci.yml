@@ -28,6 +28,8 @@ jobs:
           java-version: 17
       - name: Check manifest and build the archive
         run: node scripts/package.mjs
+      - name: Test the settings backend
+        run: node --test test/settings.test.mjs
       - name: Download Gradle ${{ matrix.gradle }}
         env:
           VERSION: ${{ matrix.gradle }}

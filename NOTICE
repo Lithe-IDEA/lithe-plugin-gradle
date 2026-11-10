@@ -12,5 +12,9 @@ Version 2.0, at revision 158b854d47ac9af2bbd99c0d7c354a5875cb6f81:
 
 Copyright 2000-2023 JetBrains s.r.o. and contributors.
 
+The official Node.js SDK in io.github.lithe-idea.gradle-build/backend/vendor/
+lithe-plugin-sdk/ comes from Lithe-IDEA/lithe-plugin-docs at the revision pinned
+in sdk.lock.json, licensed under the Apache License, Version 2.0.
+
 Gradle is a trademark of Gradle, Inc. This plugin is not affiliated with or
 endorsed by Gradle, Inc.

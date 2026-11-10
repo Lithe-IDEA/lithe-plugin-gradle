@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "https://github.com/Lithe-IDEA/lithe-plugin-docs",
+    "revision": "db17c719bad755b420600c897615c67ed8cab67c",
+    "sdkVersion": "0.4.0"
+  },
+  "files": [
+    {
+      "upstream": "LICENSE",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/LICENSE",
+      "sha256": "93ff573f89d32394501fcc82767e73b1824add861f088bbd3eec9e0afae20d21"
+    },
+    {
+      "upstream": "sdk/node/src/backend.mjs",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/backend.mjs",
+      "sha256": "e5a6419c7ec8a8367c9f602ac0e8478f51ee7f1756e3bc0188c50ca1a1a677e5"
+    },
+    {
+      "upstream": "sdk/node/src/diagnostics.mjs",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/diagnostics.mjs",
+      "sha256": "2735350b0e9658729311d18e9632cb38f93a01576ed0de61c66eefc8dd89e73f"
+    },
+    {
+      "upstream": "sdk/node/src/errors.mjs",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/errors.mjs",
+      "sha256": "e756aa0a88f1807ffdc985f3aed307f283c2a59902a287e22dd408dae5179bd2"
+    },
+    {
+      "upstream": "sdk/node/src/framing.mjs",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/framing.mjs",
+      "sha256": "ec745be1ecf4cf24d521c5aa3108da2bbbfb9156f2197fcb5158de1f1bc9cfd1"
+    },
+    {
+      "upstream": "sdk/node/src/host.mjs",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/host.mjs",
+      "sha256": "4f4feaa8e3fdfa7f765e48b9ca53365126b0f57c5857d0b46208fccaa82e9e4e"
+    },
+    {
+      "upstream": "sdk/node/src/index.d.ts",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/index.d.ts",
+      "sha256": "d229e44b7cec125f1a1f388312aabe64cb0ac089e13c0a2cb91ff88a019f50c2"
+    },
+    {
+      "upstream": "sdk/node/src/index.mjs",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/index.mjs",
+      "sha256": "79042db2ac6e0ac896ff0a1643ee540217b7b84fab4d1b1b82ad4246263d16af"
+    },
+    {
+      "upstream": "sdk/node/src/process.mjs",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/process.mjs",
+      "sha256": "a72f78cbfbb8d98b2d44ebea7f869038a3e34ebe7ee000f63cdd36fb2aaece66"
+    },
+    {
+      "upstream": "sdk/node/src/protocol.mjs",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/protocol.mjs",
+      "sha256": "f145f8c156c8831dc3f3b8076553d677484b59e63da7c1d8ceea16b5fa24b68f"
+    },
+    {
+      "upstream": "sdk/node/src/state.mjs",
+      "path": "io.github.lithe-idea.gradle-build/backend/vendor/lithe-plugin-sdk/state.mjs",
+      "sha256": "946618214fbcb736c76ee85c87e0b969fe853fbab215f7c192990f2edf2035a4"
+    }
+  ]
+}

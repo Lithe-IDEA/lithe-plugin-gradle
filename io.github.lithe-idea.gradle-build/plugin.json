@@ -2,17 +2,23 @@
   "schemaVersion": 2,
   "id": "io.github.lithe-idea.gradle-build",
   "displayName": "Gradle",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "pluginAPIVersion": 3,
-  "requires": { "buildSystems": 1, "projectGenerators": 1 },
+  "requires": { "backend": 2, "buildSystems": 1, "pluginFunctions": 1, "projectGenerators": 1, "serverProcess": 1 },
   "vendor": {
     "id": "io.github.lithe-idea",
     "displayName": "Lithe Community",
     "signatureRequirement": "none"
   },
-  "permissions": ["process.build", "project.generate"],
+  "permissions": ["backend.launch", "process.build", "project.generate", "workspace.metadata"],
   "activationEvents": ["onBuildSystem:gradle"],
   "languages": [],
+  "backend": {
+    "launch": { "kind": "runtime", "tool": "node", "minimumVersion": "20.3", "entry": "backend/main.mjs" }
+  },
+  "pluginFunctions": {
+    "exports": [{ "id": "languageImport.settings", "version": 1, "context": "workspace" }]
+  },
   "buildSystems": [
     {
       "id": "gradle",
@@ -170,8 +176,7 @@
           "settings.gradle.kts"
         ]
       },
-      "layout": { "excluded": [".gradle", "build"] },
-      "languageImport": { "kind": "gradle", "options": { "offline": "offline", "gradleUserHome": "gradleUserHome" } }
+      "layout": { "excluded": [".gradle", "build"] }
     }
   ],
   "projectGenerators": [
