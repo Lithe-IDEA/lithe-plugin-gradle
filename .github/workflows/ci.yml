@@ -26,10 +26,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: Verify vendored Java SDK sources
+        run: node scripts/sdk/verify-sdk.mjs
       - name: Check manifest and build the archive
         run: node scripts/package.mjs
       - name: Test the settings backend
-        run: node --test test/settings.test.mjs
+        run: node scripts/test-backend.mjs
       - name: Download Gradle ${{ matrix.gradle }}
         env:
           VERSION: ${{ matrix.gradle }}

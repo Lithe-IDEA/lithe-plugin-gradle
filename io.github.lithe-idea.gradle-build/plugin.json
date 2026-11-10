@@ -14,7 +14,7 @@
   "activationEvents": ["onBuildSystem:gradle"],
   "languages": [],
   "backend": {
-    "launch": { "kind": "runtime", "tool": "node", "minimumVersion": "20.3", "entry": "backend/main.mjs" }
+    "launch": { "kind": "runtime", "tool": "java", "minimumVersion": "8", "entry": "lib/lithe-gradle-backend.jar" }
   },
   "pluginFunctions": {
     "exports": [{ "id": "languageImport.settings", "version": 1, "context": "workspace" }]

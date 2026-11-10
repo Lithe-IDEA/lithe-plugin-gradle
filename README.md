@@ -4,7 +4,7 @@
 IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、应用和测试。
 这是一个**社区插件**，用 Lithe 的声明式构建系统接口（插件 API 3 的 `buildSystems`）实现，
 只带一个 Gradle 初始化脚本，没有任何宿主代码。工具窗口由 macOS 宿主用 SwiftUI 原生渲染，插件不提供 Web 入口；
-插件另带一个很小的 Node 后端，向 Java Support 提供 Gradle 的导入设置（见下文“Java 语言服务器的导入设置”）。
+插件另带一个很小的 Java 后端，向 Java Support 提供 Gradle 的导入设置（见下文“Java 语言服务器的导入设置”）。
 
 > English: Gradle support for Lithe through the declarative `buildSystems` plugin API — projects with their tasks by
 > group, JavaExec tasks as run entries, test runs with JUnit reports, compiler diagnostics and per-configuration
@@ -47,7 +47,7 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 
 `gradle.properties` 先读 Gradle User Home 里的，再读项目根的，项目根优先。`workspaceRoot` 必须落在已打开的本地工作区文件夹内，
 否则函数拒绝（`gradle.invalidRoot`）。工具栏的 Offline 与 Gradle User Home 选项只保存在宿主里，插件后端读不到，
-所以它们不再传给 JDT LS，需要宿主把已存选项交给插件函数后才能恢复。后端需要 Node.js 20.3 或更新版本。
+所以它们不再传给 JDT LS，需要宿主把已存选项交给插件函数后才能恢复。后端用 Lithe 找到的 Java（8 或更新版本）运行，Gradle 本身也需要它，所以不增加新的运行时要求。
 
 ## 依赖的程序
 
@@ -88,17 +88,19 @@ Lithe 已预置 Lithe Store 社区插件源；如果你之前移除了它，先�
 ```text
 io.github.lithe-idea.gradle-build/plugin.json         # 插件描述，目录名必须等于插件 id
 io.github.lithe-idea.gradle-build/lithe.init.gradle   # 初始化脚本，导出模型和依赖树
-io.github.lithe-idea.gradle-build/backend/            # languageImport.settings 后端（Node）和固定版本的官方 SDK（sdk.lock.json）
+backend/                                              # languageImport.settings 后端（Java），打包成 lib/lithe-gradle-backend.jar
+vendor/lithe-plugin-sdk-java/                         # 固定版本的官方 Java SDK 源码（sdk.lock.json 逐文件校验，编译进后端 jar）
 io.github.lithe-idea.gradle-build/icons/              # 工具窗口和工具栏图标（来源见 NOTICE）
 io.github.lithe-idea.gradle-build/templates/java/     # New Project 的 Gradle Java 项目模板（Kotlin/Groovy DSL、示例代码）
 test/fixtures/multi/                                  # 两个子项目的示例构建，供集成测试使用
 scripts/package.mjs                                   # 打包成 dist/gradle-build-<版本>-darwin.zip
 scripts/test.mjs                                      # 用真实 Gradle 运行清单里的命令并检查输出
+scripts/test-backend.mjs                              # 经 stdio 驱动后端 jar，测试 languageImport.settings（不需要 Gradle）
 .github/workflows/ci.yml                              # PR 时打包、用 Gradle 7.6 和 9.6.1 测试，并用 Lithe Store 的规则检查
 .github/workflows/release.yml                         # 推送 v<版本> 标签时发布 GitHub Release
 ```
 
-本地需要 Node.js 22+、JDK 17+ 和 Gradle（还需要 `zip`）：
+本地需要 Node.js 22+（只运行脚本）、JDK 17+ 和 Gradle（还需要 `zip`）；打包用 JDK 自带的 `javac` 和 `jar` 编译后端，不需要 Maven：
 
 ```bash
 node scripts/package.mjs
