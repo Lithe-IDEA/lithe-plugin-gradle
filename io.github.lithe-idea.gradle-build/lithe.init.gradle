@@ -139,7 +139,7 @@ if (modelOutput != null) {
         }
         modelDocument.putAll([
             format: 'litheBuildModel',
-            version: 1,
+            version: 0,
             projects: projects,
             tasks: tasks,
             contentRoots: roots,
@@ -257,7 +257,7 @@ gradle.rootProject { root ->
             List trees = paths.collect { dependencyTrees.get(it) }
             def document = [
                 format: 'litheDependencies',
-                version: 1,
+                version: 0,
                 dependencies: selected == null ? trees : trees[0].children,
             ]
             new File(dependenciesOutput).setText(JsonOutput.toJson(document) + '\n', 'UTF-8')

@@ -2,9 +2,8 @@
 
 为 [Lithe](https://github.com/1lck/Lithe-IDEA) 提供 Gradle 项目支持：识别 Gradle 构建，在 Gradle 工具窗口里像
 IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、应用和测试。
-这是一个**社区插件**，用 Lithe 的声明式构建系统接口（插件 API 3 的 `buildSystems`）实现，
-只带一个 Gradle 初始化脚本，没有任何宿主代码。工具窗口由 macOS 宿主用 SwiftUI 原生渲染，插件不提供 Web 入口；
-插件另带一个很小的 Java 后端，向 Java Support 提供 Gradle 的导入设置（见下文“Java 语言服务器的导入设置”）。
+这是一个**社区插件**，使用声明式 `buildSystems` 接口与一个 Java 后端；宿主呈现构建模型，插件不提供网页界面。
+1.0.0 开发分支面向 Viva preview 的契约 0，未发布；历史 Release 的安装要求不能用于判断本分支兼容性。
 
 > English: Gradle support for Lithe through the declarative `buildSystems` plugin API — projects with their tasks by
 > group, JavaExec tasks as run entries, test runs with JUnit reports, compiler diagnostics and per-configuration
@@ -36,7 +35,7 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 ## Java 语言服务器的导入设置
 
 旧版清单里的 `buildSystems[].languageImport` 已从插件契约删除。现在 Gradle 插件导出插件函数 `languageImport.settings`
-（版本 1，`context: "workspace"`），Java Support 在启动 JDT LS 前调用它，只接受 `java.import.gradle.` 等白名单前缀内的键。
+（函数接口版本 1，`context: "workspace"`；传输协议和能力协商版本为 0），Java Support 在启动 JDT LS 前调用它，只接受 `java.import.gradle.` 等白名单前缀内的键。
 后端只读取工作区里的文件，不运行 Gradle、不写任何文件：
 
 | 来源 | 导出的键 |
@@ -45,9 +44,10 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 | `gradle.properties` 的 `org.gradle.java.home`（绝对路径） | `java.import.gradle.java.home` |
 | `gradle.properties` 的 `org.gradle.jvmargs` | `java.import.gradle.jvmArguments` |
 
-`gradle.properties` 先读 Gradle User Home 里的，再读项目根的，项目根优先。`workspaceRoot` 必须落在已打开的本地工作区文件夹内，
+`gradle.properties` 按 Gradle 的真实优先级合并：Gradle User Home 高于项目根（[官方规则](https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_configuration_properties)）。`workspaceRoot` 必须落在已打开的本地工作区文件夹内，
 否则函数拒绝（`gradle.invalidRoot`）。工具栏的 Offline 与 Gradle User Home 选项只保存在宿主里，插件后端读不到，
-所以它们不再传给 JDT LS，需要宿主把已存选项交给插件函数后才能恢复。后端用 Lithe 找到的 Java（8 或更新版本）运行，Gradle 本身也需要它，所以不增加新的运行时要求。
+所以它们不再传给 JDT LS，需要宿主把已存选项交给插件函数后才能恢复。后端用 Lithe 找到的 Java（8 或更新版本）运行，初始堆 16 MiB、最大堆 128 MiB；此限制不改变 Gradle 或 JDT LS 的堆配置。
+可选属性文件不存在时正常继续；不可读、非普通文件、格式损坏或超过 256 KiB 时返回分类失败，不用默认值掩盖配置问题。
 
 ## 依赖的程序
 
@@ -75,13 +75,14 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 
 ## 安装
 
-`v0.1.2` 移除宿主已删除的 `languageImport` 字段并改用插件函数提供导入设置；`v0.1.1` 修复重复运行测试时报告显示为零的问题。均需要兼容 `buildSystems` 插件 API 3 的 Lithe preview 开发版。 `v0.1.2` 需要 `backend: 2`、`pluginFunctions: 1`、`projectGenerators: 1`，稳定版 Lithe 0.6.7 会拒绝安装，Store 让稳定版继续使用 0.1.1。
-Lithe Store 条目合并后，可在 **设置 → 插件 → 插件市场** 搜索 “Gradle”，安装并按提示重启；
-条目合并前可下载 Release 的 ZIP，从 Lithe 开发版的 **⚙ → 从磁盘安装插件…** 安装。
-Lithe 已预置 Lithe Store 社区插件源；如果你之前移除了它，先在 **⚙ → 管理插件仓库…** 中重新添加
-`https://github.com/Lithe-IDEA/Lithe-store`。
+相对已发布的 0.1.2，此次契约迁移要求更换宿主：旧版 macOS Lithe 不能安装当前包。
+按仓库版本规则记为 1.0.0（重大兼容性变化）；用户需先换用配套 Viva preview，再安装新包。
+设置键、Gradle 的最低版本与项目文件没有迁移。当前没有稳定宿主支持这份契约，发布时必须为预发布；本次不打标签、不发布 Release。
 
-一个包同时支持 Apple Silicon 和 Intel Mac；Lithe for Windows 支持插件市场后会增加 Windows 包。
+
+本分支的清单、构建模型、依赖文档及函数协商均为当前契约 0。需要配套 Viva preview，尚未发布到 Store。
+通过宿主的“从磁盘安装插件”选择开发 ZIP；不要用本分支覆盖已发布的同版本发行包。
+后端 JAR 与声明式脚本没有平台专属二进制，但目前打包文件名仍沿用 `-darwin.zip`；文件名不能证明 Windows 工作流已验收。
 
 ## 开发
 
@@ -118,29 +119,33 @@ GRADLE=/path/to/gradle node scripts/test.mjs
 在 Lithe 开发版中，通过 **设置 → 插件 → ⚙ → 从磁盘安装插件…** 选择
 `dist/package/io.github.lithe-idea.gradle-build` 即可安装本地开发包（发行版 Lithe 不加载未签名的开发包）。
 
-`plugin.json` 的完整格式见 lithe-plugin-docs 里的
-[插件契约](https://github.com/Lithe-IDEA/lithe-plugin-docs/blob/main/contract/v1/README.md)
-和[构建工具接入指南](https://github.com/Lithe-IDEA/lithe-plugin-docs/blob/main/guides/build-tool-integration.md)。
+`plugin.json` 与插件开发资料只以 [Rust Core 的 shared/plugins](https://github.com/Lithe-IDEA/Lithe-core-rust/tree/main/shared/plugins) 为准。
+本分支 Java SDK 固定到 Core `0be1d34f8926fc284a23874a4f6a57a14e339de8`，源码原样保存于 vendor，
+`sdk.lock.json` 逐文件校验来源与 SHA-256；`node scripts/sdk/verify-sdk.mjs` 可离线校验。
+SDK 的旧日志注释仍提及版本 1，实际协商实现使用版本 0；插件没有修改官方 SDK。
 
 ## 诊断日志
 
-此插件的 Gradle 命令及模型导出脚本由宿主执行，后端只在 Java Support 调用 `languageImport.settings` 时启动，用官方 SDK 自动记录该函数的结构化操作事实（不含路径和属性值）。
-启用结构化日志 v2 的 Lithe macOS preview 由宿主将构建、运行与测试的进程终态、退出码和耗时
-记录到当前会话的 `run` 通道；Gradle 的编译输出和测试报告继续留在 Build Output 与测试界面。
-模型与依赖树 JSON 是工作流数据，不是日志，仍通过宿主提供的临时输出文件返回。
+后端通过官方 SDK 上报结构化操作结果，宿主统一写入插件通道；插件不自建日志文件。
+`languageImport.settings` 是高频读取，关闭成功记录，失败保留一次 ERROR。当前没有降级或恢复分支。
+分类标识为 `gradle.invalidRoot`、`gradle.noWorkspaceContext`、`gradle.propertiesUnreadable`、`gradle.propertiesTooLarge`、`gradle.propertiesInvalid`；
+日志不包含路径、属性值或构建输出。Java SDK 握手及生命周期由宿主记录。
 
-模型导出和依赖树命令同样由宿主执行。宿主替插件把每次执行记成与 SDK 插件同一组的操作事实，写入
-`plugins/io.github.lithe-idea.gradle-build/host` 通道，操作名为 `lithe/build/model` 和
-`lithe/build/dependencies`（与由插件后端提供时的请求名相同）：结果成功解码记
-`plugins.operation.finished`（INFO，含耗时）；失败记 `plugins.operation.failed`（ERROR），失败码只取自
-执行阶段——`host.planFailed`（无法生成命令计划）、`host.executableUnavailable`（无法解析 Gradle 或
-wrapper）、`host.launchFailed`（进程拉起失败）、`host.timedOut`（超时）、`host.commandFailed`（命令失败
-退出）、`host.outputInvalid`（输出文件无法解码）。取消和被新请求取代的结果不记录；事实不含 Gradle 输出、
-路径或命令行。插件不需要任何日志代码，宿主实现见 https://github.com/1lck/Lithe-IDEA/pull/1720。
+声明式模型与依赖命令由宿主观察，在 `plugins/io.github.lithe-idea.gradle-build/host` 通道记录一次终态，
+成功为 INFO，失败为 ERROR，取消不记录。构建、运行、测试的输出仍属于各自的工作流界面。
+工作流 JSON 是返回数据，不是日志；插件包只读，输出位置由宿主提供。
 
-排障时使用 Lithe 的独立日志窗口和诊断导出。不启用 Gradle `--debug` 来复制环境、凭据、
-完整命令行或构建正文，也不将 Gradle User Home、daemon 状态或输出文件迁入日志目录。
-Windows 的日志实现仍为 v1；本文没有声明 Windows 已完成 v2 验收。
+后端脚本测试覆盖成功抑制、真实失败唯一性、可选文件缺失及损坏/超大属性文件，也覆盖主动中止与异常大报文后的进程清理。
+驱动限制帧 16 MiB、stderr 尾部 64 KiB、诊断 1000 条；Windows 用系统进程树终止，避免对负 PID 的 Unix 操作失效后留下 JVM。
+这些生命周期回归已在实际 Java 8 和原生 Windows 的 Java 8 后端运行。
+既有测试驱动的未使用 Maven 分支另见 [#1880](https://github.com/1lck/Lithe-IDEA/issues/1880)。
+同一迁移后 JAR、同一 Java 8、六对交错测量，仅改变 JVM 堆选项：初始化并执行八次真实配置查询后的 RSS 中位数从
+45.98 MiB 变为 43.80 MiB（-4.72%，benchstat p=0.002）；初始化加八次查询的时间为 78.39/78.44 ms，无显著差异（p=0.485）。
+这是配置后端的单点 RSS，不是峰值或整套 Java 支持的内存；128 MiB 是 Java 堆上限，不是进程总内存上限。
+JAR 入口开关由 Java 工具定义提供；需要配套 Viva 经 Core 实例化该模板。SDK 测试验证包中的 JVM 选项与函数协议，
+真实 Viva 集成另行验证工具模板、配置回读与中转无超时。
+
+这些测试不能替代目标平台原生日志窗口的逐项验收；未执行的启动失败、取消与窗口验收应在交付说明中单列。
 
 ## 发布新版本
 
@@ -151,8 +156,8 @@ Windows 的日志实现仍为 v1；本文没有声明 Windows 已完成 v2 验�
    git tag v0.2.0 && git push origin v0.2.0
    ```
 
-3. `Release` 工作流会核对标签与版本、打包、测试并发布 Release（说明里附 SHA-256）；`v0.1.0` 会直接标为预发布。
-4. `v0.1.0` 预发布需要单独提交 Lithe Store 条目合并请求；后续稳定版可由 Store 自动追踪并开合并请求，合并后用户即可在 Lithe 中更新。
+3. `Release` 工作流会核对标签与版本、打包、测试并发布预发布 Release（说明里附 SHA-256）；当前契约只由 Viva preview 支持，不能发布为稳定版。
+4. 当前开发版本保持预发布，不进入市场；宿主稳定兼容性与两平台验收完成后，再按 Lithe Store 的规则准备稳定发行。
 
 ## 许可
 

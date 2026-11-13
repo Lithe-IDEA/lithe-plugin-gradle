@@ -42,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "为 Lithe 提供 Gradle 项目、任务分组、JavaExec 应用运行、筛选测试、编译诊断与依赖树。"
+            echo "为 Viva preview 提供 Gradle 项目、任务分组、JavaExec 应用运行、筛选测试、编译诊断与依赖树。"
             echo
             if [[ -s "docs/releases/$GITHUB_REF_NAME.md" ]]; then
               cat "docs/releases/$GITHUB_REF_NAME.md"
@@ -61,8 +61,7 @@ jobs:
             sed 's#^dist/##' "$RUNNER_TEMP/checksums.txt"
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
-          release_flags=()
-          if [[ "$GITHUB_REF_NAME" == "v0.1.0" ]]; then
-            release_flags+=(--prerelease)
-          fi
+          # Contract 0 currently requires the Viva preview host. A stable host
+          # compatibility review must precede changing this publishing policy.
+          release_flags=(--prerelease)
           gh release create "$GITHUB_REF_NAME" dist/*.zip --title "Gradle $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" "${release_flags[@]}"

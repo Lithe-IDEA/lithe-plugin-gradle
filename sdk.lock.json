@@ -1,102 +1,87 @@
 {
   "schemaVersion": 1,
   "source": {
-    "repository": "https://github.com/Lithe-IDEA/lithe-plugin-docs",
-    "revision": "29b245c0e1d77c761d9032a3144a301d1818bfc7",
-    "localChanges": "Structured logging lithe/log implementation from the accompanying SDK working tree. Per-file hashes identify these reviewed inputs; no published release is claimed."
+    "repository": "https://github.com/Lithe-IDEA/Lithe-core-rust",
+    "revision": "0be1d34f8926fc284a23874a4f6a57a14e339de8"
   },
   "files": [
     {
-      "upstream": "LICENSE",
+      "upstream": "shared/plugins/LICENSE",
       "path": "vendor/LICENSE",
       "sha256": "93ff573f89d32394501fcc82767e73b1824add861f088bbd3eec9e0afae20d21"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Backend.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Backend.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Backend.java",
-      "sha256": "c5430ea55f5ee73a88b8c6c3517cf6bc2237827b009ae1844c105254b7f48a24",
-      "localChanges": true,
-      "upstreamSha256": "c1943d63121ce20dfadf24dfcac50581da4371356fb5f7ee30962b41b2fd04a2"
+      "sha256": "3be1cee3007bc55786ae62894d2366aabce2a9af0669acfbc030e0afe3d90c9e"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/CallContext.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/CallContext.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/CallContext.java",
-      "sha256": "c41fcc2cbc6533215ee9034409292ddeb6237d6c3defdd65b2cdfb8fb848dde8",
-      "localChanges": true,
-      "upstreamSha256": "8157d980a585b85ed31b96ad974fe980e167b6c0b7701b2636328ba84c0b62af"
+      "sha256": "eb25a8b572de751411eab4380d044907b8fe40acf33889fa759e3b6be325ef45"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Cancellation.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Cancellation.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Cancellation.java",
-      "sha256": "826c246360a607eb40ce950202db0988a465718082dc22be539f045139671db3",
-      "localChanges": true,
-      "upstreamSha256": "87eb1a9b673f59774ac1688393f62f8aa5379ead1ed2464b50ab64a0d6ad80d9"
+      "sha256": "826c246360a607eb40ce950202db0988a465718082dc22be539f045139671db3"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/CancelledException.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/CancelledException.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/CancelledException.java",
       "sha256": "699c054b1857a0518fd244ff193bc87445495ae40cbf7cc34436ac92ba42973e"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Diagnostics.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Diagnostics.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Diagnostics.java",
-      "sha256": "e6b70f167f1b030509fccf399745bc7693023eabeff1201696e866340d546ec9",
-      "localChanges": true,
-      "upstreamSha256": null
+      "sha256": "1268691d9cb950776e9f659d11d9480e51069e90aa6437f2809ac0e00c3a57d4"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Framing.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Framing.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Framing.java",
       "sha256": "510a82f0c29e634d4235326ed9abccc2c618f795e9aca6c354d516c7dce278db"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Host.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Host.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Host.java",
-      "sha256": "ff2cc8830645722173a257aec66adec94cfae7d5a91501b1024e2843954dc8f1"
+      "sha256": "974c51e84638f5e708cab471100d9cfcc7f7ff9af568f309c8285bd4c5e9455d"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/HostChannel.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/HostChannel.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/HostChannel.java",
-      "sha256": "79e337d8fc495c1c993d33205f70d79a0baa5fe49c054ef7032f02ce500f147c",
-      "localChanges": true,
-      "upstreamSha256": "1830ac36651759f3b4f77bda5fb23fd4b478a2c153671fc01920af38faefd09f"
+      "sha256": "7c3e15d5ea79f17374371cc32c4b983f1274289cc0741870f6cccc9c55ff5553"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/HostError.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/HostError.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/HostError.java",
-      "sha256": "8072d652209042f578c3eaf49600f8797ed19662b8119581772f60a3b972fa96"
+      "sha256": "fc24c7ede0363c32c11b4bea6b879401524267b90f2db9930fda1338b32e4bf3"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Json.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Json.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Json.java",
       "sha256": "7ff4a54ab5003cd86046db3b35110b4906b97fc56b8d934f33e6f51eb96dd5ed"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/PluginError.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/PluginError.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/PluginError.java",
-      "sha256": "882485659c7e77833ebb383dd8175b7eede292596696f63678fbcd868c029806",
-      "localChanges": true,
-      "upstreamSha256": "33dec00015fc1611084bd99063e90dbce3c306e99b83faed1cd6a2f8cab24de7"
+      "sha256": "882485659c7e77833ebb383dd8175b7eede292596696f63678fbcd868c029806"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/PluginSdkError.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/PluginSdkError.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/PluginSdkError.java",
       "sha256": "ced28c084e0f0d1d5c42d29d1c85b6528e065b9a933f7a6ab0a4eae1bcd6a520"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Processes.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Processes.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Processes.java",
-      "sha256": "86b50e196fb23ccd28e576b524a8da2d8928ac3113bbcd105180ceaef9981319",
-      "localChanges": true,
-      "upstreamSha256": "e1a499d9fc526179c624be1084188e2a394e46f5d5c512cc5c3e3b3d39661aeb"
+      "sha256": "a8ab4b1e5dc2d4eac2cbe90eb302517cab6f0283c210f8c64f2e01edaceb318d"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Protocol.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Protocol.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Protocol.java",
-      "sha256": "b491ba1a55f869bf29ba337684fe0a1c42c00b9ae8887dac508cc508748d419d"
+      "sha256": "d08b4b386d5e0671dc69ec57f7abd603a745689b2869f36e96335c7b958f19f5"
     },
     {
-      "upstream": "sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/StateStore.java",
+      "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/StateStore.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/StateStore.java",
       "sha256": "c56519730a9243d5ce9e8333025456bd934890bd7ad134de3b8e8fb9fd28bfe4"
     }

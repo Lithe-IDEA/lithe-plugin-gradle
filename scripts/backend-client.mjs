@@ -2,10 +2,14 @@
 // frames over the process's stdio, `initialize` offering litheBuild 1, then
 // lithe/build/* requests. Every wait is bounded, and the backend runs in its
 // own process group so a test can always end whatever it left behind.
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 export const WAIT_MS = 20_000;
+const MAX_FRAME_BYTES = 16 * 1024 * 1024;
+const MAX_HEADER_BYTES = 8 * 1024;
+const MAX_STDERR_BYTES = 64 * 1024;
+const MAX_DIAGNOSTICS = 1000;
 
 export class BackendClient {
   #buffer = Buffer.alloc(0);
@@ -20,7 +24,7 @@ export class BackendClient {
     // Answers to requests the backend sends to the host, keyed by method.
     this.hostRequests = hostRequests;
     this.child = spawn(java, [...javaOptions, "-jar", jar, ...(args ?? ["--state", state])], {
-      env, stdio: ["pipe", "pipe", "pipe"], detached: true,
+      env, stdio: ["pipe", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true,
     });
     this.exited = new Promise((resolve) => this.child.once("exit", (code, signal) => {
       this.#fail(`the backend exited with ${signal ?? `status ${code}`}`);
@@ -28,7 +32,9 @@ export class BackendClient {
     }));
     this.child.once("error", (error) => this.#fail(`cannot start the backend: ${error.message}`));
     this.child.stdout.on("data", (chunk) => this.#read(chunk));
-    this.child.stderr.on("data", (chunk) => { this.stderr += chunk; });
+    this.child.stderr.on("data", (chunk) => {
+      this.stderr = Buffer.concat([Buffer.from(this.stderr), chunk]).subarray(-MAX_STDERR_BYTES).toString("utf8");
+    });
     this.child.stdin.on("error", () => {});
   }
 
@@ -74,8 +80,8 @@ export class BackendClient {
       processId: process.pid,
       rootUri: pathToFileURL(root).href,
       capabilities: { experimental: {
-        ...(functions ? { litheFunctions: { versions: [1, 2, 3] } } : { litheBuild: { versions: [1] } }),
-        litheLogging: { versions: [1] },
+        ...(functions ? { litheFunctions: { versions: [0] } } : { litheBuild: { versions: [0] } }),
+        litheLogging: { versions: [0] },
       } },
     });
     this.notify("initialized", {});
@@ -94,7 +100,16 @@ export class BackendClient {
 
   /** Ends the backend's whole process group, for teardown after a failure. */
   kill() {
-    if (!this.child.pid) return;
+    if (!this.child.pid || this.child.exitCode !== null || this.child.signalCode !== null) return;
+    if (process.platform === "win32") {
+      try {
+        execFileSync("taskkill.exe", ["/PID", String(this.child.pid), "/T", "/F"], {timeout: 5000, windowsHide: true, stdio: "ignore"});
+      } catch (error) {
+        // taskkill returns 128 when the owned process exited before it ran.
+        if (error.status !== 128) throw error;
+      }
+      return;
+    }
     // macOS answers EPERM for a group whose members already exited but are not reaped yet.
     try { process.kill(-this.child.pid, "SIGKILL"); }
     catch (error) { if (error.code !== "ESRCH" && error.code !== "EPERM") throw error; }
@@ -113,11 +128,17 @@ export class BackendClient {
   }
 
   #read(chunk) {
+    if (this.#buffer.length + chunk.length > MAX_FRAME_BYTES + MAX_HEADER_BYTES) return this.#broken("an oversized input buffer");
     this.#buffer = Buffer.concat([this.#buffer, chunk]);
     for (;;) {
       const headerEnd = this.#buffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) return;
+      if (headerEnd < 0) {
+        if (this.#buffer.length > MAX_HEADER_BYTES) return this.#broken("an oversized frame header");
+        return;
+      }
+      if (headerEnd > MAX_HEADER_BYTES) return this.#broken("an oversized frame header");
       const length = Number(/Content-Length: *(\d+)/i.exec(this.#buffer.subarray(0, headerEnd).toString("ascii"))?.[1]);
+      if (length > MAX_FRAME_BYTES) return this.#broken("an oversized frame");
       if (!Number.isSafeInteger(length)) return this.#broken("a frame without Content-Length");
       if (this.#buffer.length < headerEnd + 4 + length) return;
       let message;
@@ -125,6 +146,7 @@ export class BackendClient {
       catch { return this.#broken("a frame that is not JSON"); }
       this.#buffer = this.#buffer.subarray(headerEnd + 4 + length);
       if (message.method === "lithe/log") {
+        if (this.diagnostics.length >= MAX_DIAGNOSTICS) return this.#broken("too many diagnostic facts");
         this.diagnostics.push(message.params);
       } else if (message.id !== undefined && message.method !== undefined) {
         const answer = this.hostRequests[message.method];

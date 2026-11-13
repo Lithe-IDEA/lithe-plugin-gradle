@@ -30,7 +30,7 @@ import java.util.stream.Stream;
 /**
  * Child processes a backend starts for one call.
  *
- * <p>Lithe's host offers no process capability in protocol version 1, so a
+ * <p>Lithe's host offers no process capability, so a
  * backend runs its tools itself; this helper makes sure that the call ending,
  * cancelling it, or the backend shutting down also ends the tools it started.
  *

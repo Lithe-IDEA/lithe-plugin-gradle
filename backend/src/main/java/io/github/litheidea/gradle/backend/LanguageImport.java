@@ -5,9 +5,12 @@ import io.github.litheidea.plugin.sdk.Json;
 import io.github.litheidea.plugin.sdk.PluginError;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,8 +22,8 @@ import java.util.concurrent.TimeUnit;
  * Support calls before it starts JDT LS: the import settings Gradle's own
  * configuration files imply. Nothing here runs Gradle or writes a file; the
  * workspace root it is asked about must lie inside an open local workspace
- * folder. {@code gradle.properties} of the project wins over the one in the
- * Gradle user home, as in Gradle itself.
+ * folder. Gradle user-home properties take precedence over project properties,
+ * as documented by Gradle.
  *
  * <p>{@code GRADLE_USER_HOME} (absolute) becomes {@code java.import.gradle.user.home},
  * {@code org.gradle.java.home} (absolute) {@code java.import.gradle.java.home} and
@@ -77,8 +80,8 @@ final class LanguageImport {
     static Map<String, Object> settings(Path root, Map<String, String> environment) {
         Path home = userHome(environment);
         Properties merged = new Properties();
-        load(merged, home.resolve("gradle.properties"));
         load(merged, root.resolve("gradle.properties"));
+        load(merged, home.resolve("gradle.properties"));
         Map<String, Object> settings = new LinkedHashMap<>();
         String explicitHome = environment.get("GRADLE_USER_HOME");
         if (explicitHome != null && !explicitHome.isEmpty() && Paths.get(explicitHome).isAbsolute()) {
@@ -97,17 +100,34 @@ final class LanguageImport {
         return result;
     }
 
-    /** Adds the entries of a properties file; a missing, unreadable or oversized file adds nothing. */
+    /** Missing files are optional; a failed read must never silently select a different JDK. */
     private static void load(Properties target, Path file) {
         try {
-            if (!Files.isRegularFile(file) || Files.size(file) > MAX_PROPERTIES_BYTES) {
-                return;
+            BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
+            if (!attributes.isRegularFile()) {
+                throw new PluginError("gradle.propertiesUnreadable", "Gradle configuration is not a regular file.");
+            }
+            if (attributes.size() > MAX_PROPERTIES_BYTES) {
+                throw new PluginError("gradle.propertiesTooLarge", "Gradle configuration exceeds the read limit.");
             }
             try (InputStream input = Files.newInputStream(file)) {
-                target.load(input);
+                // Recheck the bound while reading: the file may grow after stat.
+                byte[] bytes = new byte[(int) MAX_PROPERTIES_BYTES + 1];
+                int count = 0;
+                for (int read; count < bytes.length && (read = input.read(bytes, count, bytes.length - count)) != -1;) {
+                    count += read;
+                }
+                if (count > MAX_PROPERTIES_BYTES) {
+                    throw new PluginError("gradle.propertiesTooLarge", "Gradle configuration exceeds the read limit.");
+                }
+                target.load(new ByteArrayInputStream(bytes, 0, count));
             }
-        } catch (IOException | IllegalArgumentException ignored) {
-            // The file contributes nothing; JDT LS then imports with its defaults.
+        } catch (NoSuchFileException missing) {
+            // log-exempt: expected absence: Gradle properties files are optional.
+        } catch (IllegalArgumentException invalid) {
+            throw new PluginError("gradle.propertiesInvalid", "Gradle configuration contains an invalid escape.");
+        } catch (IOException unreadable) {
+            throw new PluginError("gradle.propertiesUnreadable", "Gradle configuration could not be read.");
         }
     }
 }

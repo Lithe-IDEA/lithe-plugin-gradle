@@ -6,20 +6,17 @@ import java.util.regex.Pattern;
 
 /**
  * Wire constants and validation shared with Lithe's Rust Core
- * ({@code rust/lithe-core/src/lsp/interface/plugin_function.rs} in the Lithe
+ * ({@code rust/crates/core/src/lsp/interface/plugin_function.rs} in the Lithe
  * repository) and the Node.js
  * SDK. The SDK checks the same rules locally so a plugin author sees a mistake
  * when registering a handler instead of as a refused session at runtime.
  */
 public final class Protocol {
-    /** Protocol versions this SDK can answer: the highest of each. */
-    public static final int FUNCTIONS_VERSION = 3;
-    public static final int BUILD_VERSION = 6;
-
-    /** First plugin-function version with host services (credentials). */
-    public static final int HOST_SERVICES_VERSION = 2;
-    /** First plugin-function version with workspace contexts, discovery, and host notifications. */
-    public static final int CONTEXT_VERSION = 3;
+    /** The version of each protocol this SDK speaks; the host offers it in {@code initialize}. */
+    public static final int FUNCTIONS_VERSION = 0;
+    public static final int BUILD_VERSION = 0;
+    public static final int LOGGING_VERSION = 0;
+    public static final int KEYMAP_IMPORT_VERSION = 0;
 
     public static final String INITIALIZE = "initialize";
     public static final String INITIALIZED = "initialized";
@@ -40,8 +37,7 @@ public final class Protocol {
     public static final String BUILD_PROGRESS = "lithe/build/progress";
 
     /**
-     * Backend-to-host requests of plugin-function protocols 2 and 3. From
-     * version 3 the host adds methods without a new version;
+     * Backend-to-host requests. The host may add methods;
      * {@link Host#request} sends any {@code lithe/host/*} method, and
      * {@code getCapabilities} says which ones the session may call.
      */
@@ -82,7 +78,11 @@ public final class Protocol {
     public static final String HOST_WINDOW_SHOW_WARNING = "lithe/host/window/showWarning";
     public static final String HOST_WINDOW_SHOW_ERROR = "lithe/host/window/showError";
 
-    /** Host-to-backend notifications of plugin-function protocol 3. */
+    /** Cross-plugin calls Core relays. */
+    public static final String HOST_FUNCTIONS_PROVIDERS = "lithe/host/functions/providers";
+    public static final String HOST_FUNCTIONS_INVOKE = "lithe/host/functions/invoke";
+
+    /** Host-to-backend notifications. */
     public static final String HOST_DID_CHANGE_CONTEXTS = "lithe/host/workspace/didChangeContexts";
     public static final String HOST_SUBSCRIPTION_NOTIFY = "lithe/host/subscriptions/notify";
     public static final String HOST_COMMAND_DID_RUN = "lithe/host/commands/didRun";
@@ -108,16 +108,11 @@ public final class Protocol {
     /** Unanswered host requests Core allows a session; the SDK queues the rest. */
     public static final int MAX_PENDING_HOST_REQUESTS = 16;
     public static final int MAX_CREDENTIAL_SECRET_BYTES = 16 * 1024;
-
-    /** Minimum negotiated version; unknown methods can never pass admission. */
-    static int buildMethodVersion(String method) {
-        if (BUILD_MODEL.equals(method) || BUILD_DEPENDENCIES.equals(method)) return 1;
-        if (BUILD_EXECUTE.equals(method)) return 2;
-        if (BUILD_TEST.equals(method) || BUILD_DISCOVER_TESTS.equals(method)) return 3;
-        if (BUILD_PREPARE_DEBUG.equals(method)) return 5;
-        if (BUILD_PREPARE_RUN.equals(method)) return 4;
-        return Integer.MAX_VALUE;
-    }
+    /** Timeout Core gives a relayed call that names none. */
+    public static final int RELAY_DEFAULT_TIMEOUT_MILLISECONDS = 60000;
+    /** Longest timeout of a relayed call; the SDK sends a longer one unchanged and leaves the cap to Core. */
+    public static final int RELAY_MAX_TIMEOUT_MILLISECONDS = 600000;
+    public static final int MAX_PARENT_OPERATION_ID_BYTES = 128;
 
     static boolean buildProgress(String method) {
         return BUILD_EXECUTE.equals(method) || BUILD_TEST.equals(method) || BUILD_PREPARE_RUN.equals(method) || BUILD_PREPARE_DEBUG.equals(method);
@@ -152,7 +147,7 @@ public final class Protocol {
     }
 
     /**
-     * The key alphabet of protocols 2 and 3: 1-128 ASCII letters, digits,
+     * The key alphabet of host services: 1-128 ASCII letters, digits,
      * {@code .}, {@code _}, {@code :}, or {@code -}. Credential keys, context
      * IDs, and subscription IDs use it.
      */
@@ -168,6 +163,15 @@ public final class Protocol {
         Map<?, ?> reference = (Map<?, ?>) value;
         Object id = reference.get("contextID");
         return id instanceof String && isCredentialKey((String) id) && isGeneration(reference.get("generation"));
+    }
+
+    /** A {@code parentOperationID}: a string of 1-128 UTF-8 bytes. */
+    static boolean isParentOperationId(Object value) {
+        if (!(value instanceof String)) {
+            return false;
+        }
+        int bytes = utf8Length((String) value);
+        return bytes >= 1 && bytes <= MAX_PARENT_OPERATION_ID_BYTES;
     }
 
     /** A command ID from the plugin's manifest: 1-128 of {@code [a-z0-9.-]}. */

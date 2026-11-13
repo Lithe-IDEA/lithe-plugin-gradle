@@ -24,9 +24,10 @@ public final class CallContext {
     private final ProgressSink progress;
     private final Host host;
     private final Map<String, Object> workspaceContext;
+    private final Map<String, Object> caller;
 
     CallContext(Cancellation cancellation, Backend backend, String functionId, String operationId, ProgressSink progress,
-            Host host, Map<String, Object> workspaceContext) {
+            Host host, Map<String, Object> workspaceContext, Map<String, Object> caller) {
         this.cancellation = cancellation;
         this.backend = backend;
         this.functionId = functionId;
@@ -34,6 +35,7 @@ public final class CallContext {
         this.progress = progress;
         this.host = host;
         this.workspaceContext = workspaceContext;
+        this.caller = caller;
     }
 
     /**
@@ -92,16 +94,21 @@ public final class CallContext {
         return functionId;
     }
 
-    /** The wire operation ID of a function or bounded build call, otherwise null. */
+    /**
+     * The wire operation ID of a function or bounded build call, otherwise null.
+     * It identifies the call in diagnostics and, when the request has no usable
+     * operation ID, falls back to the JSON-RPC request ID: do not use it as a
+     * {@code parentOperationID}. {@link #host()} already sends the right one.
+     */
     public String operationId() {
         return operationId;
     }
 
     /**
      * Host services that belong to this call: requests still unanswered when
-     * the call is cancelled or ends fail with {@link CancelledException} and,
-     * from protocol 3, are cancelled on the wire. A subscription created here
-     * outlives the call until it is disposed.
+     * the call is cancelled or ends fail with {@link CancelledException} and
+     * are cancelled on the wire. A subscription created here outlives the call
+     * until it is disposed.
      */
     public Host host() {
         return host;
@@ -109,11 +116,28 @@ public final class CallContext {
 
     /**
      * The {@code { contextID, generation }} of the workspace a function was
-     * invoked for (protocol 3), or null: for other calls, before protocol 3,
-     * and for an invocation outside a workspace. Pass it to the
+     * invoked for, or null: for other calls and for an invocation outside a
+     * workspace. Pass it to the
      * {@link Host} methods that name a context.
      */
     public Map<String, Object> workspaceContext() {
         return workspaceContext;
+    }
+
+    /**
+     * The plugin that called this function through the relay: an
+     * unmodifiable {@code { pluginID }}, written by Core from the calling
+     * session. Null when the host started the call, and for calls that are not
+     * function invocations.
+     * Decide by who asks from this, never from a plugin ID in the params,
+     * which any caller can write.
+     */
+    public Map<String, Object> caller() {
+        return caller;
+    }
+
+    /** The {@code pluginID} of {@link #caller()}, or null when there is no calling plugin. */
+    public String callerPluginId() {
+        return caller == null ? null : (String) caller.get("pluginID");
     }
 }

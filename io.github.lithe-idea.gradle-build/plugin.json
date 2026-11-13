@@ -1,10 +1,10 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 0,
   "id": "io.github.lithe-idea.gradle-build",
   "displayName": "Gradle",
-  "version": "0.1.2",
-  "pluginAPIVersion": 3,
-  "requires": { "backend": 2, "buildSystems": 1, "pluginFunctions": 1, "projectGenerators": 1, "serverProcess": 1 },
+  "version": "1.0.0",
+  "pluginAPIVersion": 0,
+  "requires": { "backend": 0, "buildSystems": 0, "pluginFunctions": 0, "projectGenerators": 0 },
   "vendor": {
     "id": "io.github.lithe-idea",
     "displayName": "Lithe Community",
@@ -14,7 +14,7 @@
   "activationEvents": ["onBuildSystem:gradle"],
   "languages": [],
   "backend": {
-    "launch": { "kind": "runtime", "tool": "java", "minimumVersion": "8", "entry": "lib/lithe-gradle-backend.jar" }
+    "launch": { "kind": "runtime", "tool": "java", "minimumVersion": "8", "entry": "lib/lithe-gradle-backend.jar", "runtimeArguments": ["-Xms16m", "-Xmx128m"] }
   },
   "pluginFunctions": {
     "exports": [{ "id": "languageImport.settings", "version": 1, "context": "workspace" }]
@@ -200,10 +200,11 @@
         },
         {
           "id": "jdk",
-          "type": "runtime",
+          "type": "tool",
           "title": "JDK",
-          "runtime": "java",
-          "minimumVersion": "11"
+          "tool": "java",
+          "minimumVersion": "11",
+          "pinAs": "project"
         },
         {
           "id": "addSampleCode",
@@ -252,5 +253,6 @@
         }
       ]
     }
-  ]
+  ],
+  "requiresTools": ["java"]
 }

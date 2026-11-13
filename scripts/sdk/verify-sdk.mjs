@@ -8,7 +8,7 @@ const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 /** Verify every vendored production source before building the backend. */
 export async function verifySdk(root = repository) {
   const lock = JSON.parse(await readFile(join(root, 'sdk.lock.json'), 'utf8'));
-  if (lock.schemaVersion !== 1 || !/^[0-9a-f]{40}$/.test(lock.source?.revision) || !Array.isArray(lock.files) || lock.source.repository !== 'https://github.com/Lithe-IDEA/lithe-plugin-docs') {
+  if (lock.schemaVersion !== 1 || !/^[0-9a-f]{40}$/.test(lock.source?.revision) || !Array.isArray(lock.files) || lock.source.repository !== 'https://github.com/Lithe-IDEA/Lithe-core-rust') {
     throw new Error('The SDK lock must identify its upstream base and every source hash.');
   }
   const expected = new Set();
@@ -16,7 +16,7 @@ export async function verifySdk(root = repository) {
     if (!entry.path?.startsWith('vendor/') || entry.path.includes('\\')
       || entry.path.split('/').some((part) => !part || part === '.' || part === '..')
       || !/^[0-9a-f]{64}$/.test(entry.sha256) || expected.has(entry.path)
-      || (entry.localChanges === true && (!Object.hasOwn(entry, 'upstreamSha256') || (entry.upstreamSha256 !== null && !/^[0-9a-f]{64}$/.test(entry.upstreamSha256))))) {
+      || Object.hasOwn(entry, 'localChanges') || !entry.upstream?.startsWith('shared/plugins/')) {
       throw new Error('Invalid or duplicate SDK source lock entry.');
     }
     const file = join(root, entry.path);
