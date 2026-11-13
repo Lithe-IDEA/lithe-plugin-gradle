@@ -13,14 +13,12 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
- * The session's host-request state for plugin-function protocols 2 and 3. The
- * backend owns the wire; this class owns what Core expects of a well-behaved
- * client -- at most 16 unanswered host requests, cancellation through
- * {@code $/cancelRequest} from version 3, and subscription events routed by
- * ID, in order, off the reader thread.
+ * The session's host-request state. The backend owns the wire; this class
+ * owns what Core expects of a well-behaved client -- at most 16 unanswered
+ * host requests, cancellation through {@code $/cancelRequest}, and
+ * subscription events routed by ID, in order, off the reader thread.
  *
- * <p>Contract: {@code contract/v1/README.md}, "Host services (protocol
- * version 2)" and the version 3 sections after it.
+ * <p>Contract: {@code contract/v1/README.md}, "Host services".
  */
 final class HostChannel {
     /** Events kept for a subscription whose creating request is still unanswered. */
@@ -28,8 +26,8 @@ final class HostChannel {
 
     /** The backend's wire. */
     interface Transport {
-        /** The negotiated plugin-function version, or 0 before or without one. */
-        int version();
+        /** Whether the host offered plugin functions ({@code litheFunctions}); false before {@code initialize}. */
+        boolean negotiated();
 
         boolean ready();
 
@@ -123,15 +121,15 @@ final class HostChannel {
         this.transport = transport;
     }
 
-    int version() {
-        return transport.version();
+    boolean negotiated() {
+        return transport.negotiated();
     }
 
     /**
      * Sends {@code method} once a slot is free. Cancelling any of
      * {@code scope} rejects the caller at once with {@link CancelledException};
-     * a request already sent is cancelled on the wire from version 3, and never
-     * sent again, because a cancelled mutation may already have taken effect.
+     * a request already sent is cancelled on the wire, and never sent again,
+     * because a cancelled mutation may already have taken effect.
      */
     CompletableFuture<Object> request(String method, Object params, List<Cancellation> scope) {
         if (method == null || !method.startsWith(Protocol.HOST_PREFIX)) {
@@ -141,10 +139,10 @@ final class HostChannel {
         if (!open()) {
             return failed(notReady());
         }
-        if (transport.version() < Protocol.HOST_SERVICES_VERSION) {
+        if (!transport.negotiated()) {
             // The answer Core would give, without the round trip.
             return failed(unavailable(method,
-                    "The host did not negotiate plugin-function protocol 2 or later, which offers host services."));
+                    "The host did not negotiate plugin functions (litheFunctions), which offer host services."));
         }
         for (Cancellation cancellation : scope) {
             try {
@@ -265,11 +263,11 @@ final class HostChannel {
         }
     }
 
-    /** The cached {@code getCapabilities} answer; Core answers it itself, from version 3. */
+    /** The cached {@code getCapabilities} answer; Core answers it itself. */
     CompletableFuture<Map<String, Object>> capabilities() {
-        if (transport.version() < Protocol.CONTEXT_VERSION) {
+        if (!transport.negotiated()) {
             return failed(unavailable(Protocol.HOST_GET_CAPABILITIES,
-                    "Capability discovery needs plugin-function protocol 3."));
+                    "The host did not negotiate plugin functions (litheFunctions), which offer capability discovery."));
         }
         CompletableFuture<Map<String, Object>> answer;
         synchronized (lock) {
@@ -296,31 +294,27 @@ final class HostChannel {
     }
 
     /**
-     * Whether this session may call {@code method}. From version 3 the answer
-     * comes from {@code getCapabilities}; version 2 has no discovery, so it
-     * reports the methods version 2 defines, and a missing grant still fails
-     * the request.
+     * Whether this session may call {@code method}, from
+     * {@code getCapabilities}; false when the host offered no plugin functions.
+     * A missing grant still fails the request.
      */
     CompletableFuture<Boolean> supports(String method) {
-        if (transport.version() >= Protocol.CONTEXT_VERSION) {
-            return capabilities().thenApply(answer -> {
-                Object services = answer.get("services");
-                if (!(services instanceof Map)) {
-                    return false;
-                }
-                for (Object service : ((Map<?, ?>) services).values()) {
-                    Object methods = service instanceof Map ? ((Map<?, ?>) service).get("methods") : null;
-                    if (methods instanceof List && ((List<?>) methods).contains(method)) {
-                        return true;
-                    }
-                }
-                return false;
-            });
+        if (!transport.negotiated()) {
+            return CompletableFuture.completedFuture(false);
         }
-        return CompletableFuture.completedFuture(transport.version() >= Protocol.HOST_SERVICES_VERSION
-                && (Protocol.HOST_CREDENTIALS_GET.equals(method)
-                        || Protocol.HOST_CREDENTIALS_SET.equals(method)
-                        || Protocol.HOST_CREDENTIALS_DELETE.equals(method)));
+        return capabilities().thenApply(answer -> {
+            Object services = answer.get("services");
+            if (!(services instanceof Map)) {
+                return false;
+            }
+            for (Object service : ((Map<?, ?>) services).values()) {
+                Object methods = service instanceof Map ? ((Map<?, ?>) service).get("methods") : null;
+                if (methods instanceof List && ((List<?>) methods).contains(method)) {
+                    return true;
+                }
+            }
+            return false;
+        });
     }
 
     /** Ends the channel with the session: queued requests fail, subscriptions end. */
@@ -384,8 +378,7 @@ final class HostChannel {
         sent.response.whenComplete((result, error) -> {
             synchronized (lock) {
                 // The slot frees when Core answers, also after a cancellation:
-                // from version 3 Core answers it at once, before version 3 the
-                // host still finishes the request.
+                // Core answers a cancelled request at once.
                 inFlight--;
             }
             settle(entry, result, error == null ? null : Backend.unwrap(error));
@@ -401,12 +394,10 @@ final class HostChannel {
             }
             if (entry.state == State.QUEUED) {
                 queue.remove(entry);
-            } else if (transport.version() >= Protocol.CONTEXT_VERSION) {
-                if (entry.state == State.SENDING) {
-                    entry.cancelAfterWrite = true;
-                } else {
-                    id = entry.id;
-                }
+            } else if (entry.state == State.SENDING) {
+                entry.cancelAfterWrite = true;
+            } else {
+                id = entry.id;
             }
         }
         if (id != null) {

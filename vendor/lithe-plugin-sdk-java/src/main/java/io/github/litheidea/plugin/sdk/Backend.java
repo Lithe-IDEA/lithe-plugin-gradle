@@ -13,6 +13,9 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
@@ -32,8 +35,8 @@ import java.util.function.Supplier;
  * then call {@link #listen()}. Handlers run on their own threads, so several
  * calls can be in flight at once; shared plugin state needs its own locking.
  *
- * <p>Host services ({@code lithe/host/*}) of plugin-function protocols 2 and 3
- * are in {@link #host()}, or a handler's {@link CallContext#host()}.
+ * <p>Host services ({@code lithe/host/*}) are in {@link #host()}, or a
+ * handler's {@link CallContext#host()}.
  *
  * <p>Contract: {@code contract/v1/README.md} ("Build providers"
  * and "Plugin functions"). Behaviour and error codes match the Node.js SDK.
@@ -43,6 +46,74 @@ public final class Backend {
     @FunctionalInterface
     public interface Handler {
         Object handle(Map<String, Object> params, CallContext context) throws Exception;
+    }
+
+    /** Answers an independently negotiated shortcut import request. */
+    @FunctionalInterface
+    public interface KeymapImportHandler {
+        Object handle(KeymapSnapshot snapshot, CallContext context) throws Exception;
+    }
+
+    /** One file within the user's selected source; its path is a relative label. */
+    public static final class KeymapSourceFile {
+        private final String id;
+        private final String path;
+        private final long byteCount;
+        KeymapSourceFile(String id, String path, long byteCount) { this.id = id; this.path = path; this.byteCount = byteCount; }
+        public String id() { return id; }
+        public String path() { return path; }
+        public long byteCount() { return byteCount; }
+    }
+
+    /** Opaque selected source scoped to one import and backend session. */
+    public static final class KeymapSnapshot {
+        private final String providerId;
+        private final String snapshotId;
+        private final Host host;
+        KeymapSnapshot(String providerId, String snapshotId, Host host) {
+            this.providerId = providerId; this.snapshotId = snapshotId; this.host = host;
+        }
+        public String providerId() { return providerId; }
+        public String snapshotId() { return snapshotId; }
+        private Map<String, Object> scope() {
+            Map<String, Object> result = singleton("providerID", providerId);
+            result.put("snapshotID", snapshotId);
+            return result;
+        }
+        public CompletableFuture<List<KeymapSourceFile>> listInputs() {
+            return host.request("lithe/host/keymapImport/listInputs", scope()).thenApply(raw -> {
+                Object files = raw instanceof Map ? ((Map<?, ?>) raw).get("files") : null;
+                if (!(files instanceof List) || ((List<?>) files).size() > 128) throw invalidKeymapResponse();
+                List<KeymapSourceFile> result = new ArrayList<>();
+                for (Object item : (List<?>) files) {
+                    if (!(item instanceof Map)) throw invalidKeymapResponse();
+                    Map<?, ?> file = (Map<?, ?>) item;
+                    Object id = file.get("id"), path = file.get("path"), count = file.get("byteCount");
+                    if (!(id instanceof String) || !validSnapshotToken((String) id) || !(path instanceof String)
+                            || ((String) path).isEmpty() || ((String) path).getBytes(StandardCharsets.UTF_8).length > 4096
+                            || !(count instanceof Number) || ((Number) count).doubleValue() != ((Number) count).longValue()
+                            || ((Number) count).longValue() < 0 || ((Number) count).longValue() > 1048576) throw invalidKeymapResponse();
+                    result.add(new KeymapSourceFile((String) id, (String) path, ((Number) count).longValue()));
+                }
+                return result;
+            });
+        }
+        public CompletableFuture<byte[]> readChunk(String fileId, long offset, int maximumBytes) {
+            if (!validSnapshotToken(fileId) || offset < 0 || offset > 1048576 || maximumBytes < 1 || maximumBytes > 131072) {
+                throw invalidKeymapResponse();
+            }
+            Map<String, Object> params = scope();
+            params.put("fileID", fileId); params.put("offset", offset); params.put("maximumBytes", maximumBytes);
+            return host.request("lithe/host/keymapImport/readChunk", params).thenApply(raw -> {
+                Object encoded = raw instanceof Map ? ((Map<?, ?>) raw).get("data") : null;
+                if (!(encoded instanceof String) || ((String) encoded).length() > 174764) throw invalidKeymapResponse();
+                final byte[] bytes;
+                try { bytes = Base64.getDecoder().decode((String) encoded); }
+                catch (IllegalArgumentException error) { throw invalidKeymapResponse(); }
+                if (bytes.length > maximumBytes || !Base64.getEncoder().encodeToString(bytes).equals(encoded)) throw invalidKeymapResponse();
+                return bytes;
+            });
+        }
     }
 
     /** Answers a standard LSP request, for a backend that is also a language server. */
@@ -81,42 +152,35 @@ public final class Backend {
 
     /** Protocols the host agreed to in {@code initialize}. */
     public static final class Negotiated {
-        static final Negotiated NONE = new Negotiated(0, 0);
+        static final Negotiated NONE = new Negotiated(false, false);
 
-        private final int functionsVersion;
-        private final int buildVersion;
+        private final boolean functions;
+        private final boolean build;
 
-        Negotiated(int functionsVersion, int buildVersion) {
-            this.functionsVersion = functionsVersion;
-            this.buildVersion = buildVersion;
-        }
-
-        /** Whether the host negotiated plugin functions ({@code litheFunctions}). */
-        public boolean functions() {
-            return functionsVersion > 0;
+        Negotiated(boolean functions, boolean build) {
+            this.functions = functions;
+            this.build = build;
         }
 
         /**
-         * Selected plugin-function version (1-3), or zero when unavailable.
-         * Version 2 adds host credentials; version 3 workspace contexts, the
-         * other host services, and host notifications.
+         * Whether the host negotiated plugin functions ({@code litheFunctions}),
+         * which also carry the host services, the workspace contexts, the host
+         * notifications, and the calls to other plugins' functions.
          */
-        public int functionsVersion() {
-            return functionsVersion;
+        public boolean functions() {
+            return functions;
         }
 
-        /** Whether the host negotiated typed build requests. */
+        /** Whether the host negotiated typed build requests and this backend declared a build handler. */
         public boolean build() {
-            return buildVersion > 0;
-        }
-
-        /** Selected build protocol version, or zero when unavailable. */
-        public int buildVersion() {
-            return buildVersion;
+            return build;
         }
     }
 
     private enum Phase { IDLE, LISTENING, INITIALIZING, READY, SHUTTING_DOWN, EXITED }
+
+    /** The {@code version} every build result document carries. */
+    private static final long BUILD_DOCUMENT_VERSION = 0;
 
     /** Canonical result format of each typed build request. */
     private static final Map<String, String> BUILD_FORMATS;
@@ -139,6 +203,8 @@ public final class Backend {
     private final Object lock = new Object();
     private final Object writeLock = new Object();
     private final Map<String, Handler> functions = new HashMap<>();
+    private final Map<String, KeymapImportHandler> keymapProviders = new HashMap<>();
+    private final Set<String> selectedKeymapProviders = new TreeSet<>();
     private final Map<String, Handler> buildHandlers = new HashMap<>();
     private final Map<String, RequestHandler> requestHandlers = new HashMap<>();
     private final Map<String, NotificationHandler> notificationHandlers = new HashMap<>();
@@ -154,7 +220,7 @@ public final class Backend {
     private final AtomicInteger nextRequestId = new AtomicInteger(1);
     private final ExecutorService executor = Executors.newCachedThreadPool(new ThreadNamer());
     private final HostChannel channel = new HostChannel(new Wire());
-    private final Host host = new Host(channel, Collections.<Cancellation>emptyList());
+    private final Host host = new Host(channel, Collections.<Cancellation>emptyList(), null);
     /** Serializes register/unregister so the host sees them in call order. */
     private CompletableFuture<Void> registrations = CompletableFuture.completedFuture(null);
     private volatile Phase phase = Phase.IDLE;
@@ -169,9 +235,10 @@ public final class Backend {
         if (experimental instanceof Map
                 && (((Map<?, ?>) experimental).containsKey("litheBuild")
                         || ((Map<?, ?>) experimental).containsKey("litheFunctions")
+                        || ((Map<?, ?>) experimental).containsKey("litheKeymapImport")
                         || ((Map<?, ?>) experimental).containsKey("litheLogging"))) {
             throw new PluginSdkError("sdk.capabilities.reserved",
-                    "litheBuild and litheFunctions are negotiated by the SDK; declare handlers instead.");
+                    "litheBuild, litheFunctions, litheKeymapImport and litheLogging are negotiated by the SDK; declare handlers instead.");
         }
         this.name = name == null ? "lithe-plugin-backend" : name;
         this.version = version;
@@ -203,9 +270,9 @@ public final class Backend {
     }
 
     /**
-     * Host services of plugin-function protocols 2 and 3, usable once the
-     * session is ready. Prefer a handler's {@link CallContext#host()}, whose
-     * requests end with the call.
+     * Host services, usable once the session is ready. Prefer a handler's {@link CallContext#host()}, whose
+     * requests end with the call; this one belongs to no call, so its calls to
+     * other plugins name no parent call unless the call says one.
      */
     public Host host() {
         return host;
@@ -235,12 +302,12 @@ public final class Backend {
         return declareBuild(Protocol.BUILD_DEPENDENCIES, handler);
     }
 
-    /** Executes a bounded provider task; requires build protocol 2 or newer. */
+    /** Executes a bounded provider task. */
     public Backend onExecute(Handler handler) {
         return declareBuild(Protocol.BUILD_EXECUTE, handler);
     }
 
-    /** Runs exact test selectors; requires build protocol 3 or newer. */
+    /** Runs exact test selectors. */
     public Backend onTest(Handler handler) {
         return declareBuild(Protocol.BUILD_TEST, handler);
     }
@@ -250,12 +317,12 @@ public final class Backend {
         return declareBuild(Protocol.BUILD_DISCOVER_TESTS, handler);
     }
 
-    /** Prepares native executable target facts; requires build protocol 5. */
+    /** Prepares native executable target facts. */
     public Backend onPrepareDebug(Handler handler) {
         return declareBuild(Protocol.BUILD_PREPARE_DEBUG, handler);
     }
 
-    /** Prepares a portable application launch with build protocol 4 or newer. */
+    /** Prepares a portable application launch. */
     public Backend onPrepareRun(Handler handler) {
         return declareBuild(Protocol.BUILD_PREPARE_RUN, handler);
     }
@@ -274,6 +341,18 @@ public final class Backend {
             }
             checkNewFunction(id, handler);
             functions.put(id, handler);
+        }
+        return this;
+    }
+
+    /** Declares a shortcut import provider before initialization. */
+    public Backend keymapImportProvider(String id, KeymapImportHandler handler) {
+        synchronized (lock) {
+            if (!beforeAnswer() || !validKeymapProvider(id) || handler == null
+                    || keymapProviders.containsKey(id) || keymapProviders.size() >= 8) {
+                throw new PluginSdkError("sdk.keymap.invalidRegistration", "Invalid or duplicate shortcut import provider.");
+            }
+            keymapProviders.put(id, handler);
         }
         return this;
     }
@@ -298,7 +377,7 @@ public final class Backend {
 
     /**
      * Handles {@code lithe/host/commands/didRun} for one of the plugin's
-     * commands (protocol 3). It is an event: the host waits for no result.
+     * commands. It is an event: the host waits for no result.
      *
      * @param commandId the command's ID from the manifest, 1-128 of {@code [a-z0-9.-]}
      */
@@ -316,7 +395,7 @@ public final class Backend {
     }
 
     /**
-     * Handles {@code lithe/host/workspace/didChangeContexts} (protocol 3) with
+     * Handles {@code lithe/host/workspace/didChangeContexts} with
      * {@code { revision }}; call {@code host().workspace().listContexts()} for
      * the contexts.
      */
@@ -594,10 +673,14 @@ public final class Backend {
             invokeFunction(id, params);
             return;
         }
+        if (method.equals("lithe/keymap/import")) {
+            invokeKeymap(id, params);
+            return;
+        }
         Handler build;
         RequestHandler handler;
         synchronized (lock) {
-            build = negotiated.buildVersion() >= Protocol.buildMethodVersion(method) ? buildHandlers.get(method) : null;
+            build = negotiated.build() ? buildHandlers.get(method) : null;
             handler = requestHandlers.get(method);
         }
         if (build != null) {
@@ -654,7 +737,7 @@ public final class Backend {
      * grant; one this SDK does not know is ignored, as the contract asks.
      */
     private void hostNotification(String method, Object raw) {
-        if (negotiated.functionsVersion() < Protocol.CONTEXT_VERSION || !(raw instanceof Map)) {
+        if (!negotiated.functions() || !(raw instanceof Map)) {
             return;
         }
         Map<String, Object> params = Json.object(raw);
@@ -713,29 +796,16 @@ public final class Backend {
             Map<String, Object> offered = experimental(params.get("capabilities"));
             loggingReady = false;
             earlyDiagnostics.clear();
-            logging = offers(offered.get("litheLogging"), 1);
+            logging = offers(offered.get("litheLogging"), Protocol.LOGGING_VERSION);
             if (!logging) {
                 phase = Phase.LISTENING;
-                respond(id, null, error(Protocol.INVALID_REQUEST, "The backend requires litheLogging version 1."));
+                respond(id, null, error(Protocol.INVALID_REQUEST,
+                        "The backend requires litheLogging version " + Protocol.LOGGING_VERSION + "."));
                 return;
             }
-            int buildVersion = 0;
-            if (!buildHandlers.isEmpty()) {
-                for (int version = Protocol.BUILD_VERSION; version > 0; version--) {
-                    if (offers(offered.get("litheBuild"), version)) {
-                        buildVersion = version;
-                        break;
-                    }
-                }
-            }
-            int functionsVersion = 0;
-            for (int version = Protocol.FUNCTIONS_VERSION; version > 0; version--) {
-                if (offers(offered.get("litheFunctions"), version)) {
-                    functionsVersion = version;
-                    break;
-                }
-            }
-            agreed = new Negotiated(functionsVersion, buildVersion);
+            agreed = new Negotiated(
+                    offers(offered.get("litheFunctions"), Protocol.FUNCTIONS_VERSION),
+                    !buildHandlers.isEmpty() && offers(offered.get("litheBuild"), Protocol.BUILD_VERSION));
             negotiated = agreed;
             hooks = new ArrayList<>(initializeHooks);
         }
@@ -764,16 +834,32 @@ public final class Backend {
                     diagnostics().degraded("initialize", "functions_unavailable");
                 }
                 Map<String, Object> experimental = new LinkedHashMap<>(experimental(capabilities));
-                experimental.put("litheLogging", singleton("version", 1));
+                experimental.put("litheLogging", singleton("version", Protocol.LOGGING_VERSION));
+                Map<String, Object> offeredCapabilities = experimental(params.get("capabilities"));
+                Object keymap = offeredCapabilities.get("litheKeymapImport");
+                if (offers(keymap, Protocol.KEYMAP_IMPORT_VERSION) && keymap instanceof Map) {
+                    Object providers = ((Map<?, ?>) keymap).get("providers");
+                    if (providers instanceof List && ((List<?>) providers).size() <= 8) {
+                        selectedKeymapProviders.clear();
+                        for (Object provider : (List<?>) providers) {
+                            if (provider instanceof String && keymapProviders.containsKey(provider)) selectedKeymapProviders.add((String) provider);
+                        }
+                        if (!selectedKeymapProviders.isEmpty()) {
+                            Map<String, Object> entry = singleton("version", Protocol.KEYMAP_IMPORT_VERSION);
+                            entry.put("providers", new ArrayList<>(selectedKeymapProviders));
+                            experimental.put("litheKeymapImport", entry);
+                        }
+                    }
+                }
                 if (agreed.build()) {
-                    experimental.put("litheBuild", singleton("version", agreed.buildVersion()));
+                    experimental.put("litheBuild", singleton("version", Protocol.BUILD_VERSION));
                 }
                 if (agreed.functions()) {
                     List<Object> offered = new ArrayList<>();
                     for (String functionId : functionIds()) {
                         offered.add(singleton("id", functionId));
                     }
-                    Map<String, Object> entry = singleton("version", agreed.functionsVersion());
+                    Map<String, Object> entry = singleton("version", Protocol.FUNCTIONS_VERSION);
                     entry.put("functions", offered);
                     experimental.put("litheFunctions", entry);
                 }
@@ -819,12 +905,41 @@ public final class Backend {
         });
     }
 
+    private void invokeKeymap(Object id, Object raw) {
+        Map<String, Object> params = raw instanceof Map ? Json.object(raw) : new LinkedHashMap<>();
+        Object provider = params.get("providerID"), snapshot = params.get("snapshotID");
+        KeymapImportHandler handler;
+        synchronized (lock) {
+            handler = provider instanceof String && selectedKeymapProviders.contains(provider) ? keymapProviders.get(provider) : null;
+        }
+        if (params.size() != 2 || !(provider instanceof String) || !validKeymapProvider((String) provider)
+                || !(snapshot instanceof String) || !validSnapshotToken((String) snapshot) || handler == null) {
+            respond(id, null, error(Protocol.INVALID_PARAMS, "Invalid shortcut import request."));
+            return;
+        }
+        run(id, null, null, null, context -> handler.handle(new KeymapSnapshot((String) provider, (String) snapshot, context.host()), context),
+                Backend::functionResult, null, null, "lithe/keymap/import", null, null);
+    }
+
+    private static boolean validKeymapProvider(String id) {
+        return id != null && id.matches("[a-z][a-z0-9-]{0,63}");
+    }
+
+    private static boolean validSnapshotToken(String id) {
+        return id != null && id.matches("[a-zA-Z0-9_-]{1,128}");
+    }
+
+    private static PluginSdkError invalidKeymapResponse() {
+        return new PluginSdkError("sdk.keymap.invalidResponse", "Invalid shortcut source response.");
+    }
+
     private void invokeFunction(Object id, Object raw) {
         Map<String, Object> invocation = raw instanceof Map ? Json.object(raw) : new LinkedHashMap<>();
         Object functionId = invocation.get("functionID");
         Object operationId = invocation.get("operationID");
         Object params = invocation.get("params");
         Map<String, Object> workspaceContext = workspaceContext(invocation.get("context"));
+        Map<String, Object> caller = callerReference(invocation.get("caller"));
         Handler handler;
         synchronized (lock) {
             handler = negotiated.functions() && functionId instanceof String ? functions.get(functionId) : null;
@@ -857,17 +972,16 @@ public final class Backend {
             notification.put("params", report);
             write(notification);
         };
+        // The call's wire operation ID is the parent of the calls it makes to other plugins.
+        String parentOperationId = Protocol.isParentOperationId(operation) ? operation : null;
         run(id, function, operation, workspaceContext, context -> handler.handle(arguments, context),
-                Backend::functionResult, () -> reporting.set(false), progress);
+                Backend::functionResult, () -> reporting.set(false), progress, function, caller, parentOperationId);
     }
 
     private void invokeBuild(Object id, String method, Map<String, Object> arguments, Handler handler) {
-        if (arguments.containsKey("modelInputs") && negotiated.buildVersion() < 6) {
-            respond(id, null, error(Protocol.INVALID_PARAMS, "Model inputs require build protocol 6."));
-            return;
-        }
         if (!Protocol.buildProgress(method)) {
-            run(id, null, null, null, context -> handler.handle(arguments, context), result -> buildResult(method, result), null, null, method);
+            run(id, null, null, null, context -> handler.handle(arguments, context), result -> buildResult(method, result), null, null, method,
+                    null, null);
             return;
         }
         Object wireId = arguments.get("operationID");
@@ -894,7 +1008,7 @@ public final class Backend {
             }
         };
         run(id, null, (String) wireId, null, context -> handler.handle(arguments, context),
-                result -> buildResult(method, result), () -> reporting.set(false), progress, method);
+                result -> buildResult(method, result), () -> reporting.set(false), progress, method, null, null);
     }
 
     private interface Invocation {
@@ -912,11 +1026,18 @@ public final class Backend {
     /** Runs one handler with its own cancellation and answers exactly once. */
     private void run(Object id, String functionId, String operationId, Map<String, Object> workspaceContext,
             Invocation invoke, Shape shape, Runnable onSettled, CallContext.ProgressSink progress) {
-        run(id, functionId, operationId, workspaceContext, invoke, shape, onSettled, progress, functionId == null ? "function-call" : functionId);
+        run(id, functionId, operationId, workspaceContext, invoke, shape, onSettled, progress,
+                functionId == null ? "function-call" : functionId, null, null);
     }
 
+    /**
+     * {@code caller} is the plugin that called a function through the relay and
+     * {@code parentOperationId} the wire operation ID calls to other plugins
+     * name as their parent; both are null for every call but a function call.
+     */
     private void run(Object id, String functionId, String operationId, Map<String, Object> workspaceContext,
-            Invocation invoke, Shape shape, Runnable onSettled, CallContext.ProgressSink progress, String diagnosticOperation) {
+            Invocation invoke, Shape shape, Runnable onSettled, CallContext.ProgressSink progress, String diagnosticOperation,
+            Map<String, Object> caller, String parentOperationId) {
         long started = System.nanoTime();
         String diagnosticOperationId = Diagnostics.requestOperationId(operationId, id);
         Cancellation cancellation = new Cancellation(() -> diagnostics().degraded("notification", "cancellation_listener_failed"));
@@ -925,7 +1046,7 @@ public final class Backend {
             incoming.put(key, new Call(cancellation, functionId));
         }
         CallContext context = new CallContext(cancellation, this, functionId, diagnosticOperationId, progress,
-                new Host(channel, Collections.singletonList(cancellation)), workspaceContext);
+                new Host(channel, Collections.singletonList(cancellation), parentOperationId), workspaceContext, caller);
         executor.execute(() -> {
             Object result = null;
             Map<String, Object> error = null;
@@ -1193,11 +1314,12 @@ public final class Backend {
                 throw new PluginSdkError("sdk.build.invalidResult", method + " returned another format.");
             }
             Object version = document.get("version");
-            if (version != null && !(version instanceof Number && ((Number) version).doubleValue() == 1)) {
-                throw new PluginSdkError("sdk.build.invalidResult", method + " returned a version other than 1.");
+            if (version != null && !(version instanceof Number && ((Number) version).doubleValue() == BUILD_DOCUMENT_VERSION)) {
+                throw new PluginSdkError("sdk.build.invalidResult",
+                        method + " returned a version other than " + BUILD_DOCUMENT_VERSION + ".");
             }
             document.put("format", expected);
-            document.put("version", 1);
+            document.put("version", BUILD_DOCUMENT_VERSION);
         }
         if (Protocol.BUILD_EXECUTE.equals(method) || Protocol.BUILD_TEST.equals(method)) {
             Object exit = document.get("exitCode");
@@ -1341,11 +1463,28 @@ public final class Backend {
         return Protocol.isContextReference(value) ? Host.contextReference(Json.object(value)) : null;
     }
 
+    /**
+     * The {@code { pluginID }} of the plugin that called a function through the
+     * relay, or null. Core adds it only to a relayed call, and only as exactly
+     * {@code { pluginID }}; anything else is not a caller.
+     */
+    private Map<String, Object> callerReference(Object value) {
+        if (!negotiated.functions() || !(value instanceof Map)) {
+            return null;
+        }
+        Map<?, ?> caller = (Map<?, ?>) value;
+        Object pluginId = caller.get("pluginID");
+        if (caller.size() != 1 || !(pluginId instanceof String) || ((String) pluginId).isEmpty()) {
+            return null;
+        }
+        return Collections.<String, Object>singletonMap("pluginID", pluginId);
+    }
+
     /** The session's wire, for host services. */
     private final class Wire implements HostChannel.Transport {
         @Override
-        public int version() {
-            return negotiated.functionsVersion();
+        public boolean negotiated() {
+            return negotiated.functions();
         }
 
         @Override
