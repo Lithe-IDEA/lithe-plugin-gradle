@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Packages the plugin into dist/<name>-<version>-darwin.zip, the asset name
-// Lithe Store's release tracker recognizes (docs/publishing.md there).
+// Packages one portable plugin archive with macOS and Windows asset names
+// recognized by Lithe Store (docs/publishing.md there).
 //
 // The package is plain data: plugin.json, icons, New Project templates, and
 // the init script that runs inside the user's own Gradle, and the Java backend
-// jar (lib/lithe-gradle-backend.jar), so one archive serves every Mac. The
+// jar (lib/lithe-gradle-backend.jar), so the bytes are shared across platforms. The
 // unpacked package stays in dist/package/ for installing a local
 // development copy into Lithe.
 //
@@ -115,3 +115,8 @@ const asset = resolve("dist", `${ASSET_PREFIX}-${manifest.version}-${PLATFORM}.z
 // Lithe refuses it instead of the archive silently carrying its target.
 execFileSync("zip", ["-qrXy", asset, PACKAGE_DIR, "-x", "*.DS_Store"], { cwd: PACKAGE_ROOT, timeout: 30_000 });
 console.log(`dist/${ASSET_PREFIX}-${manifest.version}-${PLATFORM}.zip ${sha256(asset)}`);
+// The package contains no native binaries; advertise the same verified bytes
+// under a Windows name so installers can select it without filename guessing.
+const windowsAsset = resolve("dist", `${ASSET_PREFIX}-${manifest.version}-windows.zip`);
+cpSync(asset, windowsAsset);
+console.log(`dist/${ASSET_PREFIX}-${manifest.version}-windows.zip ${sha256(windowsAsset)}`);

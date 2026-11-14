@@ -1,9 +1,8 @@
 name: Release
 
 # Push a tag v<version> matching plugin.json to publish a GitHub Release.
-# v0.1.0 is a trial release for the preview buildSystems API; publish it as a
-# pre-release immediately. Store listing needs a separate index pull request;
-# its stable-release tracker does not automatically list this pre-release.
+# Contract 0 requires the matching Viva preview. Upload a draft prerelease;
+# the maintainer verifies downloaded assets before publishing it.
 on:
   push:
     tags: ["v*"]
@@ -27,7 +26,12 @@ jobs:
           distribution: temurin
           java-version: 17
       - name: Build the archive
-        run: node scripts/package.mjs --expect-tag "$GITHUB_REF_NAME" | tee "$RUNNER_TEMP/checksums.txt"
+        run: |
+          set -euo pipefail
+          test -s "docs/releases/$GITHUB_REF_NAME.md"
+          node scripts/package.mjs --expect-tag "$GITHUB_REF_NAME" | tee "$RUNNER_TEMP/checksums.txt"
+      - name: Verify the settings backend
+        run: node scripts/test-backend.mjs
       - name: Download Gradle
         run: |
           base="https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
@@ -44,17 +48,11 @@ jobs:
           {
             echo "为 Viva preview 提供 Gradle 项目、任务分组、JavaExec 应用运行、筛选测试、编译诊断与依赖树。"
             echo
-            if [[ -s "docs/releases/$GITHUB_REF_NAME.md" ]]; then
-              cat "docs/releases/$GITHUB_REF_NAME.md"
-              echo
-            fi
-            if [[ "$GITHUB_REF_NAME" == "v0.1.0" ]]; then
-              echo "试用版：需要兼容 buildSystems 插件 API 3 的 Lithe preview 开发版；工具窗口由 macOS 宿主原生绘制。"
-              echo
-            fi
+            cat "docs/releases/$GITHUB_REF_NAME.md"
+            echo
             echo "要求 Gradle 7.6+（项目 Wrapper、GRADLE_HOME 或 PATH）及该 Gradle 版本支持的 Java。插件不附带 Gradle。"
             echo
-            echo "安装：Lithe Store 收录后可在插件市场搜索 Gradle；也可在 Lithe 开发版中从磁盘安装本页 ZIP。"
+            echo "安装：下载本页对应系统的 ZIP，在兼容 Viva 预览客户端的插件设置中从文件安装。"
             echo
             echo "SHA-256："
             echo '```'
@@ -63,5 +61,5 @@ jobs:
           } > "$RUNNER_TEMP/notes.md"
           # Contract 0 currently requires the Viva preview host. A stable host
           # compatibility review must precede changing this publishing policy.
-          release_flags=(--prerelease)
+          release_flags=(--draft --prerelease)
           gh release create "$GITHUB_REF_NAME" dist/*.zip --title "Gradle $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" "${release_flags[@]}"
