@@ -10,13 +10,14 @@ permissions:
 
 jobs:
   package:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         # The oldest version plugin.json accepts, and a current one.
         gradle: ["7.6", "9.6.1"]
+        os: [ubuntu-latest, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,6 +44,8 @@ jobs:
           echo "GRADLE=$RUNNER_TEMP/gradle-$VERSION/bin/gradle" >> "$GITHUB_ENV"
       - name: Run the declared commands with Gradle
         run: node scripts/test.mjs
+      - name: Verify Linux release archives
+        run: node --test --test-timeout=60000 scripts/package/*.test.mjs
       - name: Validate against Lithe Store rules
         if: matrix.gradle == '9.6.1'
         run: |

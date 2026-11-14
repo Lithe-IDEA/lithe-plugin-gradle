@@ -2,7 +2,7 @@
   "schemaVersion": 0,
   "id": "io.github.lithe-idea.gradle-build",
   "displayName": "Gradle",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "pluginAPIVersion": 0,
   "requires": { "backend": 0, "buildSystems": 0, "pluginFunctions": 0, "projectGenerators": 0 },
   "vendor": {

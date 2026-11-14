@@ -41,6 +41,8 @@ jobs:
           echo "GRADLE=$RUNNER_TEMP/gradle-$GRADLE_VERSION/bin/gradle" >> "$GITHUB_ENV"
       - name: Run the declared commands with Gradle
         run: node scripts/test.mjs
+      - name: Verify Linux release archives
+        run: node --test --test-timeout=60000 scripts/package/*.test.mjs
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

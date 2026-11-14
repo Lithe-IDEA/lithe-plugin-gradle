@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Packages one portable plugin archive with macOS and Windows asset names
+// Packages one portable plugin archive with macOS, Windows and Linux asset names
 // recognized by Lithe Store (docs/publishing.md there).
 //
 // The package is plain data: plugin.json, icons, New Project templates, and
@@ -115,6 +115,9 @@ const asset = resolve("dist", `${ASSET_PREFIX}-${manifest.version}-${PLATFORM}.z
 // Lithe refuses it instead of the archive silently carrying its target.
 execFileSync("zip", ["-qrXy", asset, PACKAGE_DIR, "-x", "*.DS_Store"], { cwd: PACKAGE_ROOT, timeout: 30_000 });
 console.log(`dist/${ASSET_PREFIX}-${manifest.version}-${PLATFORM}.zip ${sha256(asset)}`);
+    const linuxAsset = resolve("dist", `${ASSET_PREFIX}-${manifest.version}-linux.zip`);
+    cpSync(asset, linuxAsset);
+    console.log(`dist/${ASSET_PREFIX}-${manifest.version}-linux.zip ${sha256(linuxAsset)}`);
 // The package contains no native binaries; advertise the same verified bytes
 // under a Windows name so installers can select it without filename guessing.
 const windowsAsset = resolve("dist", `${ASSET_PREFIX}-${manifest.version}-windows.zip`);
