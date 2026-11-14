@@ -3,7 +3,7 @@
 为 [Lithe](https://github.com/1lck/Lithe-IDEA) 提供 Gradle 项目支持：识别 Gradle 构建，在 Gradle 工具窗口里像
 IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、应用和测试。
 这是一个**社区插件**，使用声明式 `buildSystems` 接口与一个 Java 后端；宿主呈现构建模型，插件不提供网页界面。
-1.0.0 开发分支面向 Viva preview 的契约 0，未发布；历史 Release 的安装要求不能用于判断本分支兼容性。
+1.0.0 预发布面向 Viva preview 的契约 0；历史 Release 的安装要求不能用于判断本分支兼容性。
 
 > English: Gradle support for Lithe through the declarative `buildSystems` plugin API — projects with their tasks by
 > group, JavaExec tasks as run entries, test runs with JUnit reports, compiler diagnostics and per-configuration
@@ -77,12 +77,12 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 
 相对已发布的 0.1.2，此次契约迁移要求更换宿主：旧版 macOS Lithe 不能安装当前包。
 按仓库版本规则记为 1.0.0（重大兼容性变化）；用户需先换用配套 Viva preview，再安装新包。
-设置键、Gradle 的最低版本与项目文件没有迁移。当前没有稳定宿主支持这份契约，发布时必须为预发布；本次不打标签、不发布 Release。
+设置键、Gradle 的最低版本与项目文件没有迁移。当前没有稳定宿主支持这份契约，发布时必须为预发布；发布为草稿预发布，下载校验后由维护者公开。
 
 
 本分支的清单、构建模型、依赖文档及函数协商均为当前契约 0。需要配套 Viva preview，尚未发布到 Store。
-通过宿主的“从磁盘安装插件”选择开发 ZIP；不要用本分支覆盖已发布的同版本发行包。
-后端 JAR 与声明式脚本没有平台专属二进制，但目前打包文件名仍沿用 `-darwin.zip`；文件名不能证明 Windows 工作流已验收。
+需要包含主仓库 [#1884](https://github.com/1lck/Lithe-IDEA/pull/1884) 的 Viva 客户端（修订 `607f00967d70a7017d49805183d0d2e6ffdf1c0d` 或更新）及 Java Support 1.1.0。通过宿主的“从磁盘安装插件”选择 ZIP；不要用本分支覆盖已发布的同版本发行包。
+后端 JAR 与声明式脚本没有平台专属二进制，`-darwin.zip` 与 `-windows.zip` 使用完全相同的归档字节。两端真实验证范围见下文；文件名本身不代表运行验收。
 
 ## 开发
 
@@ -94,7 +94,7 @@ vendor/lithe-plugin-sdk-java/                         # 固定版本的官方 Ja
 io.github.lithe-idea.gradle-build/icons/              # 工具窗口和工具栏图标（来源见 NOTICE）
 io.github.lithe-idea.gradle-build/templates/java/     # New Project 的 Gradle Java 项目模板（Kotlin/Groovy DSL、示例代码）
 test/fixtures/multi/                                  # 两个子项目的示例构建，供集成测试使用
-scripts/package.mjs                                   # 打包成 dist/gradle-build-<版本>-darwin.zip
+scripts/package.mjs                                   # 打包成 dist/gradle-build-<版本>-{darwin,windows}.zip
 scripts/test.mjs                                      # 用真实 Gradle 运行清单里的命令并检查输出
 scripts/test-backend.mjs                              # 经 stdio 驱动后端 jar，测试 languageImport.settings（不需要 Gradle）
 .github/workflows/ci.yml                              # PR 时打包、用 Gradle 7.6 和 9.6.1 测试，并用 Lithe Store 的规则检查
@@ -117,7 +117,7 @@ GRADLE=/path/to/gradle node scripts/test.mjs
 每次运行都使用 `--no-daemon`；初始化脚本自己的运行还带 `--warning-mode=fail`，出现弃用警告即失败。
 输出记录命令和每项断言的耗时，并检查运行前后插件包的文件清单与 SHA-256 保持不变。
 在 Lithe 开发版中，通过 **设置 → 插件 → ⚙ → 从磁盘安装插件…** 选择
-`dist/package/io.github.lithe-idea.gradle-build` 即可安装本地开发包（发行版 Lithe 不加载未签名的开发包）。
+`dist/package/io.github.lithe-idea.gradle-build` 即可安装本地开发包（兼容 Viva 客户端按社区插件信任流程确认安装）。
 
 `plugin.json` 与插件开发资料只以 [Rust Core 的 shared/plugins](https://github.com/Lithe-IDEA/Lithe-core-rust/tree/main/shared/plugins) 为准。
 本分支 Java SDK 固定到 Core `0be1d34f8926fc284a23874a4f6a57a14e339de8`，源码原样保存于 vendor，
@@ -156,8 +156,8 @@ JAR 入口开关由 Java 工具定义提供；需要配套 Viva 经 Core 实例�
    git tag v0.2.0 && git push origin v0.2.0
    ```
 
-3. `Release` 工作流会核对标签与版本、打包、测试并发布预发布 Release（说明里附 SHA-256）；当前契约只由 Viva preview 支持，不能发布为稳定版。
-4. 当前开发版本保持预发布，不进入市场；宿主稳定兼容性与两平台验收完成后，再按 Lithe Store 的规则准备稳定发行。
+3. `Release` 工作流会核对标签与版本、打包、测试并创建草稿预发布（维护者下载校验后公开）（说明里附 SHA-256）；当前契约只由 Viva preview 支持，不能发布为稳定版。
+4. 当前版本保持预发布，不自动进入市场；宿主稳定兼容性与两平台验收完成后，再按 Lithe Store 的规则准备稳定发行。
 
 ## 许可
 
