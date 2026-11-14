@@ -162,3 +162,7 @@ JAR 入口开关由 Java 工具定义提供；需要配套 Viva 经 Core 实例�
 ## 许可
 
 [Apache-2.0](LICENSE)。图标来自 IntelliJ Platform，见 [NOTICE](NOTICE)。
+
+## Linux ARM64 / x64
+
+Linux 构建、资源归属与原生验证入口见 [Linux 构建与验证](docs/linux-packaging.md)。
