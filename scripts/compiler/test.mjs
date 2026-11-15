@@ -9,7 +9,7 @@ import {runTool} from './process.mjs';
 import {BackendClient,bounded} from './backend-client.mjs';
 const pkg=resolve('dist/package/io.github.lithe-idea.gradle-build');
 const gradle=process.env.GRADLE??'gradle';
-const scratch=realpathSync(mkdtempSync(join(tmpdir(),'lithe-gradle-compiler-')));
+const scratch=realpathSync.native(mkdtempSync(join(tmpdir(),'lithe-gradle-compiler-')));
 const gradleHome=join(scratch,'gradle-home');
 const report=createReport('native-compiler');
 const command=(tool,args,cwd)=>runTool(tool,args,{cwd,env:{...process.env,GRADLE_USER_HOME:gradleHome},timeout:180000});
