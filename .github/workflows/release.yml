@@ -64,4 +64,4 @@ jobs:
           # Contract 0 currently requires the Viva preview host. A stable host
           # compatibility review must precede changing this publishing policy.
           release_flags=(--draft --prerelease)
-          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "Gradle $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" "${release_flags[@]}"
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --draft --title "Gradle $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" "${release_flags[@]}"

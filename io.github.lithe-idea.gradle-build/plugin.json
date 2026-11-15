@@ -2,9 +2,9 @@
   "schemaVersion": 0,
   "id": "io.github.lithe-idea.gradle-build",
   "displayName": "Gradle",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "pluginAPIVersion": 0,
-  "requires": { "backend": 0, "buildSystems": 0, "pluginFunctions": 0, "projectGenerators": 0 },
+  "requires": {"backend": 0, "buildSystems": 0, "pluginFunctions": 0, "projectGenerators": 0, "settings": 0, "sourceSettings": 0},
   "vendor": {
     "id": "io.github.lithe-idea",
     "displayName": "Lithe Community",
@@ -29,6 +29,7 @@
         "nesting": "outermost"
       },
       "invocation": {
+        "runtimeDependencies": [{"id": "java", "minimumVersion": "8", "executables": [{"kind": "toolchain", "toolchainID": "java"}, {"kind": "environment", "variable": "JAVA_HOME", "path": "bin/java", "platforms": ["macos", "linux"]}, {"kind": "environment", "variable": "JAVA_HOME", "path": "bin/java.exe", "platforms": ["windows"]}, {"kind": "command", "command": "java"}], "version": {"arguments": ["-version"], "pattern": "version \"(?:1\\.)?(\\d+(?:\\.\\d+)*)"}}],
         "executables": [
           {
             "kind": "projectFile",
@@ -46,8 +47,7 @@
           { "kind": "environment", "variable": "GRADLE_HOME", "path": "bin/gradle.bat", "platforms": ["windows"] },
           { "kind": "command", "command": "gradle" }
         ],
-        "environmentInputs": ["GRADLE_HOME"],
-        "runtimeDependencies": [{ "id": "java", "minimumVersion": "8" }],
+        "environmentInputs": ["GRADLE_HOME", "JAVA_HOME"],
         "globalArguments": ["--console=plain", "${optionArguments}"],
         "version": { "arguments": ["--version"], "pattern": "Gradle (\\d+(?:\\.\\d+){1,2})" },
         "minimumVersion": "7.6"
@@ -254,5 +254,6 @@
       ]
     }
   ],
-  "requiresTools": ["java"]
+  "requiresTools": ["java"],
+  "settingActions": [{"id": "compiler", "title": "Read compiler settings", "description": "Read actual project settings using the project tool. This can execute project code and download dependencies. Save writes the displayed native configuration files.", "function": "compiler.settings", "sourceEditor": {"editFunction": "compiler.prepareSettings", "buildSystemID": "gradle"}, "page": {"compilerID": "gradle"}}, {"id": "libraries", "title": "Read local JAR dependencies", "description": "Read actual project settings using the project tool. This can execute project code and download dependencies. Save writes the displayed native configuration files.", "function": "libraries.settings", "sourceEditor": {"editFunction": "compiler.prepareSettings", "buildSystemID": "gradle"}, "page": {"buildSystemID": "gradle"}}]
 }

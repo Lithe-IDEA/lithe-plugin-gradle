@@ -14,6 +14,11 @@ public final class GradleBackend {
         Backend backend = Backend.create("lithe-gradle-backend", version());
         backend.function(LanguageImport.FUNCTION, (params, context) -> LanguageImport.handle(params, context, System.getenv()));
         backend.suppressSuccessDiagnostics(LanguageImport.FUNCTION);
+        backend.function("compiler.settings",(params,context)->CompilerSettings.read(params,context,false));
+        backend.suppressSuccessDiagnostics("compiler.settings");
+        backend.function("libraries.settings",(params,context)->CompilerSettings.read(params,context,true));
+        backend.suppressSuccessDiagnostics("libraries.settings");
+        backend.function("compiler.prepareSettings",CompilerSettings::edit);
         backend.listen();
     }
 

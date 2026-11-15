@@ -124,6 +124,17 @@ if (modelOutput != null) {
                 entry.parent = absolute(project.parent.projectDir)
             }
             def values = [path: project.path, taskPrefix: taskPrefix(project)]
+            values['compiler.buildFile'] = absolute(project.buildFile)
+            def compiler = project.tasks.findByName('compileJava')
+            if (compiler instanceof org.gradle.api.tasks.compile.JavaCompile) {
+                def release = compiler.options.release.orNull
+                values['compiler.target'] = (release == null ? compiler.targetCompatibility : release).toString().replaceFirst('^1\\.', '')
+                values['compiler.releaseEnabled'] = (release != null).toString()
+                values['compiler.debug'] = compiler.options.debug.toString()
+                values['compiler.arguments'] = groovy.json.JsonOutput.toJson(compiler.options.compilerArgs)
+                String inheritedKey = project.parent == null ? 'litheCompilerInherited.root' : 'litheCompilerInherited.module'
+                if (compiler.extensions.extraProperties.has(inheritedKey)) values['compiler.inheritedTarget'] = compiler.extensions.extraProperties.get(inheritedKey).toString()
+            }
             String group = project.group?.toString()
             if (group) {
                 values.group = group

@@ -178,8 +178,10 @@ try {
       assert.equal(model.format, "litheBuildModel");
       assert.deepEqual(model.projects.map((project) => project.name), ["multi", "app", "core"]);
       assert.equal(byName("core").parent, byName("multi").path);
-      assert.deepEqual(byName("multi").properties, { path: ":", taskPrefix: ":", group: "demo", version: "1.0.0" });
-      assert.deepEqual(byName("core").properties, { path: ":core", taskPrefix: ":core:", group: "demo", version: "1.0.0" });
+      assert.deepEqual(Object.fromEntries(["path","taskPrefix","group","version"].map(key=>[key,byName("multi").properties[key]])), { path: ":", taskPrefix: ":", group: "demo", version: "1.0.0" });
+      assert.deepEqual(Object.fromEntries(["path","taskPrefix","group","version"].map(key=>[key,byName("core").properties[key]])), { path: ":core", taskPrefix: ":core:", group: "demo", version: "1.0.0" });
+      assert.equal(typeof byName("core").properties["compiler.target"], "string");
+      assert.match(byName("core").properties["compiler.buildFile"], /build.gradle/);
     });
 
     await check("tasks are filed under their Gradle group and run by path", () => {
