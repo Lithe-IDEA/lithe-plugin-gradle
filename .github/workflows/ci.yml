@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
@@ -44,6 +45,17 @@ jobs:
           echo "GRADLE=$RUNNER_TEMP/gradle-$VERSION/bin/gradle" >> "$GITHUB_ENV"
       - name: Run the declared commands with Gradle
         run: node scripts/test.mjs
+      - name: Verify native compiler targets and local JARs
+        run: |
+          node --test --test-timeout=15000 scripts/compiler/process.test.mjs
+          node scripts/compiler/test.mjs
+      - name: Upload native compiler projections
+        if: matrix.os == 'ubuntu-latest' && matrix.gradle == '9.6.1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-compiler-projection
+          path: .artifacts/compiler/visual-*.json
+          if-no-files-found: error
       - name: Verify Linux release archives
         run: node --test --test-timeout=60000 scripts/package/*.test.mjs
       - name: Validate against Lithe Store rules
@@ -63,3 +75,42 @@ jobs:
             }
             process.exit(failed ? 1 : 0);
           "
+
+  native-settings-visual:
+    name: Native compiler settings screenshots
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-compiler-projection
+          path: .artifacts/compiler
+      - name: Read pinned host revision
+        id: host
+        run: echo "revision=$(node -p 'JSON.parse(require("fs").readFileSync("compiler-host.json")).revision')" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: 1lck/Lithe-IDEA
+          ref: ${{ steps.host.outputs.revision }}
+          path: .artifacts/host
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: .artifacts/host/desktop/go.mod
+          cache: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.100.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Render actual compiler projections through the native host
+        run: node scripts/compiler/visual.mjs .artifacts/host
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-compiler-settings-screenshots
+          path: .artifacts/compiler/visual/
+          if-no-files-found: error
+          retention-days: 14

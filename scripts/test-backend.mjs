@@ -49,7 +49,7 @@ try {
     hostRequests: { "lithe/host/workspace/getFolders": () => ({ folders: [{ rootID: "r", name: "w", path: workspace }] }) },
   });
   const initialized = await client.initialize(workspace, { functions: true });
-  assert.deepEqual(initialized.capabilities.experimental.litheFunctions.functions, [{ id: "languageImport.settings" }]);
+  assert.deepEqual(initialized.capabilities.experimental.litheFunctions.functions, [{ id: "compiler.prepareSettings" }, { id: "compiler.settings" }, { id: "languageImport.settings" }, { id: "libraries.settings" }]);
   const invoke = (workspaceRoot, context = { contextID: "ctx", generation: 1 }) => client.send("lithe/function/invoke", {
     functionID: "languageImport.settings", operationID: `op-${Math.random()}`, params: { workspaceRoot }, ...(context ? { context } : {}),
   }).response;
