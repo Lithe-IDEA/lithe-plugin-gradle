@@ -65,7 +65,7 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 
 - `litheModel` 在所有项目配置完成后，把项目、任务和 source set 写成 Lithe 的 `litheBuildModel` 文档；
   `litheDependencyReport` 在每个项目内解析依赖配置，再写成 `litheDependencies` 文档。
-  文件位置由 Lithe 指定（`-PlitheModelOutput` / `-PlitheDependenciesOutput`）。
+  文件位置由 Lithe 指定（`-Dlithe.modelOutput` / `-Dlithe.dependenciesOutput`）。
 - 这两个命令附带 `--no-configuration-cache` 和 `--no-configure-on-demand`，确保读到所有项目；
   只导出最外层构建，`buildSrc` 和 included build 不会覆盖结果。
 - 不会编译、打包或生成 `build/`；解析依赖只下载依赖的元数据，不下载 jar。

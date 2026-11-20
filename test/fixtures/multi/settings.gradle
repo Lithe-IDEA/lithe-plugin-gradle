@@ -1,2 +1,8 @@
 rootProject.name = 'multi'
 include 'core', 'app'
+
+// Builds can validate all command-line project properties during settings evaluation.
+def internalProperties = gradle.startParameter.projectProperties.keySet().findAll { it.startsWith('lithe') }
+if (!internalProperties.isEmpty()) {
+    throw new GradleException("Unknown build parameter: ${internalProperties.join(', ')}")
+}
