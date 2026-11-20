@@ -1,13 +1,13 @@
 // Exports the build to Lithe. plugin.json passes this file with
 // --init-script to its model and dependency commands only; without Lithe's
-// project properties it registers its tasks and does nothing else.
+// command-line system properties it registers its tasks and does nothing else.
 //
 //   litheModel             (root project) writes a litheBuildModel document
-//                          to -PlitheModelOutput: every project, its tasks,
+//                          to -Dlithe.modelOutput: every project, its tasks,
 //                          and its source folders.
 //   litheDependencyReport  (root project) writes a litheDependencies
-//                          document to -PlitheDependenciesOutput: the
-//                          classpath trees of -PlitheDependenciesProject, or
+//                          document to -Dlithe.dependenciesOutput: the
+//                          classpath trees of -Dlithe.dependenciesProject, or
 //                          of every project when it is absent.
 //   litheDependencies      (every project) resolves that project's trees;
 //                          the report depends on it, because Gradle resolves
@@ -41,10 +41,11 @@ final Set<String> LITHE_TASKS = [MODEL_TASK, REPORT_TASK, PROJECT_TASK] as Set
 /** Languages whose plugins add a source directory set to each source set. */
 final List<String> LANGUAGES = ['kotlin', 'groovy', 'scala']
 
-def properties = gradle.startParameter.projectProperties
-String modelOutput = properties['litheModelOutput']
-String dependenciesOutput = properties['litheDependenciesOutput']
-String dependenciesProject = properties['litheDependenciesProject']
+// Export arguments belong to this Gradle invocation. Builds may reject unknown -P keys.
+def properties = gradle.startParameter.systemPropertiesArgs
+String modelOutput = properties['lithe.modelOutput']
+String dependenciesOutput = properties['lithe.dependenciesOutput']
+String dependenciesProject = properties['lithe.dependenciesProject']
 
 def absolute = { File file -> file.toPath().toAbsolutePath().normalize().toString() }
 def isRoot = { project -> project.parent == null }
@@ -245,16 +246,16 @@ gradle.allprojects { project ->
 
 gradle.rootProject { root ->
     root.tasks.register(MODEL_TASK) { task ->
-        task.description = 'Writes the Lithe build model to -PlitheModelOutput.'
+        task.description = 'Writes the Lithe build model to -Dlithe.modelOutput.'
         task.doLast {
             if (modelOutput == null) {
-                throw new GradleException('Set -PlitheModelOutput to the file Lithe reads.')
+                throw new GradleException('Set -Dlithe.modelOutput to the file Lithe reads.')
             }
             new File(modelOutput).setText(JsonOutput.toJson(modelDocument) + '\n', 'UTF-8')
         }
     }
     root.tasks.register(REPORT_TASK) { task ->
-        task.description = 'Writes the Lithe dependency trees to -PlitheDependenciesOutput.'
+        task.description = 'Writes the Lithe dependency trees to -Dlithe.dependenciesOutput.'
         def selected = dependenciesProject == null ? null : root.findProject(dependenciesProject)
         if (dependenciesProject != null && selected == null) {
             throw new GradleException("Lithe found no project $dependenciesProject.")
@@ -263,7 +264,7 @@ gradle.rootProject { root ->
         task.dependsOn(paths.collect { it == ':' ? ":$PROJECT_TASK" : "$it:$PROJECT_TASK" })
         task.doLast {
             if (dependenciesOutput == null) {
-                throw new GradleException('Set -PlitheDependenciesOutput to the file Lithe reads.')
+                throw new GradleException('Set -Dlithe.dependenciesOutput to the file Lithe reads.')
             }
             List trees = paths.collect { dependencyTrees.get(it) }
             def document = [

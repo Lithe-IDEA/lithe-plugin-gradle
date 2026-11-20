@@ -76,7 +76,7 @@
           "--no-configure-on-demand",
           "--init-script",
           "${pluginDir}/lithe.init.gradle",
-          "-PlitheModelOutput=${outputFile}",
+          "-Dlithe.modelOutput=${outputFile}",
           "litheModel"
         ],
         "output": "outputFile",
@@ -156,8 +156,8 @@
           "--no-configure-on-demand",
           "--init-script",
           "${pluginDir}/lithe.init.gradle",
-          "-PlitheDependenciesOutput=${outputFile}",
-          { "value": "-PlitheDependenciesProject=${project.property:path}", "when": "projectSelected" },
+          "-Dlithe.dependenciesOutput=${outputFile}",
+          { "value": "-Dlithe.dependenciesProject=${project.property:path}", "when": "projectSelected" },
           "litheDependencyReport"
         ],
         "output": "outputFile",
