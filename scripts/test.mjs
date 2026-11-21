@@ -12,11 +12,12 @@
 // Usage: node scripts/test.mjs
 
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { BackendClient, bounded } from "./backend-client.mjs";
 
 const PACKAGE_DIR = "io.github.lithe-idea.gradle-build";
 const pluginDir = resolve("dist", "package", PACKAGE_DIR);
@@ -261,6 +262,65 @@ try {
     });
 
   }
+
+  await check("Current File builds and launches the selected Gradle Java source", async () => {
+    assert.ok(buildSystem.run.some((entry) => entry.entrypoints && entry.debug?.configurationType === "java"),
+      "Gradle must handle current-file Run and Debug through its build provider");
+    const client = new BackendClient({
+      jar: join(pluginDir, "lib", "lithe-gradle-run-provider.jar"),
+      args: [], timeoutMs: COMMAND_TIMEOUT_MS,
+    });
+    try {
+      const initialized = await client.initialize(realpathSync(root), { buildVersion: 1 });
+      assert.equal(initialized.capabilities.experimental.litheBuild.version, 1);
+      const base = { buildSystemID: "gradle", root: ".", options: {}, optionArguments: [], environment: {} };
+      const file = "app/src/main/java/demo/app/Main.java";
+      const discovery = await client.request("lithe/build/runEntrypoints", { ...base, file });
+      assert.equal(discovery.entrypoints.length, 1);
+      const entry = discovery.entrypoints[0];
+      assert.equal(entry.name, "Main");
+      assert.deepEqual(entry.project, { name: "multi", path: "." });
+      const helper = await client.request("lithe/build/runEntrypoints", {
+        ...base, file: "core/src/main/java/demo/core/Greeter.java",
+      });
+      assert.deepEqual(helper.entrypoints, []);
+      const request = {
+        ...base,
+        operationID: "launch-1",
+        run: entry.run,
+        project: entry.project,
+        tool: { executable: resolve(gradle) },
+        optionArguments: ["--offline", "--warning-mode=fail", "--gradle-user-home", gradleUserHome],
+        userArguments: [],
+        launchOptions: {
+          execution: "application", runtimeArguments: ["-ea"], arguments: ["one argument"],
+          environment: { LITHE_TEST_APPLICATION: "true" }, entrypoint: entry.entrypoint,
+        },
+      };
+      const launch = await client.request("lithe/build/prepareRun", request);
+      assert.deepEqual(launch.executable, { kind: "toolchain", value: "java" });
+      assert.deepEqual(launch.environment, { LITHE_TEST_APPLICATION: "true" });
+      assert.equal(launch.arguments[0], "-ea");
+      assert.deepEqual(launch.arguments.slice(-2), ["demo.app.Main", "one argument"]);
+      const output = execFileSync("java", launch.arguments, {
+        cwd: join(root, launch.workingDirectory), timeout: 10_000, encoding: "utf8",
+      });
+      assert.match(output, /Hello, Gradle!/);
+
+      const original = readFileSync(join(root, file));
+      try {
+        writeFileSync(join(root, file), "package demo.app; public class Main { public static void main(String[] args) { missing(); } }");
+        await assert.rejects(client.request("lithe/build/prepareRun", { ...request, operationID: "launch-2" }),
+          /Gradle compilation failed/);
+      } finally {
+        writeFileSync(join(root, file), original);
+      }
+      assert.equal(await client.close(), 0);
+    } finally {
+      client.kill();
+      await bounded(client.exited, "run provider disposal", 5000);
+    }
+  });
 
   const testSelection = { project: byName("core"), suite: "demo.core.GreeterTest" };
   await run(root, buildSystem.test.arguments, testSelection);

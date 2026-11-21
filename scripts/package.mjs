@@ -99,12 +99,24 @@ execFileSync("javac", ["-encoding", "UTF-8", "--release", "8", "-Xlint:-options"
 writeFileSync(join(BACKEND_BUILD, "MANIFEST.MF"), `Main-Class: io.github.litheidea.gradle.backend.GradleBackend\nImplementation-Version: ${manifest.version}\n`);
 execFileSync("jar", ["--create", "--file", BACKEND_JAR, "--manifest", join(BACKEND_BUILD, "MANIFEST.MF"), "--date", "2026-10-20T00:00:00Z", "-C", join(BACKEND_BUILD, "classes"), "."], { stdio: "inherit", timeout: 60_000 });
 if (!existsSync(BACKEND_JAR)) throw new Error(`${BACKEND_JAR} was not built`);
+// Only the on-demand build provider uses the JDK's Java parser and needs Java 17.
+const RUN_CLASSES = join(BACKEND_BUILD, "run-classes");
+const RUN_MANIFEST = join(BACKEND_BUILD, "RUN.MF");
+const RUN_JAR = join(BACKEND_BUILD, "lithe-gradle-run-provider.jar");
+mkdirSync(RUN_CLASSES, { recursive: true });
+execFileSync("javac", ["-encoding", "UTF-8", "--release", "17", "-cp", BACKEND_JAR, "-d", RUN_CLASSES,
+    ...sourcesUnder("provider/src/main/java")], { stdio: "inherit", timeout: 120_000 });
+writeFileSync(RUN_MANIFEST, `Main-Class: io.github.litheidea.gradle.provider.RunProvider\nClass-Path: lithe-gradle-backend.jar\nImplementation-Version: ${manifest.version}\n`);
+execFileSync("jar", ["--create", "--file", RUN_JAR, "--manifest", RUN_MANIFEST, "--date", "2026-10-20T00:00:00Z",
+    "-C", RUN_CLASSES, "."], { stdio: "inherit", timeout: 60_000 });
+
 
 rmSync("dist", { recursive: true, force: true });
 const packageRoot = join(PACKAGE_ROOT, PACKAGE_DIR);
 cpSync(PACKAGE_DIR, packageRoot, { recursive: true });
 mkdirSync(join(packageRoot, "lib"), { recursive: true });
 cpSync(BACKEND_JAR, join(packageRoot, "lib", "lithe-gradle-backend.jar"));
+cpSync(RUN_JAR, join(packageRoot, "lib", "lithe-gradle-run-provider.jar"));
 cpSync("vendor/LICENSE", join(packageRoot, "SDK-LICENSE"));
 cpSync("LICENSE", join(packageRoot, "LICENSE"));
 cpSync("NOTICE", join(packageRoot, "NOTICE"));
