@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/1lck/Lithe-IDEA",
-  "revision": "e9ce7781f1a9635ced8a090b45a159af4f5ce959",
-  "coreRevision": "5802c42b5766df7375bd427c54203db415ff72d7",
+  "revision": "c2eb7a72417b615d5f2829a8572090640a6ef69c",
+  "coreRevision": "94408ca269b3c56d2c66a805d224609151c8a781",
   "package": "io.github.lithe-idea.gradle-build"
 }
