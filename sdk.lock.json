@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "repository": "https://github.com/Lithe-IDEA/Lithe-core-rust",
-    "revision": "7c1cd55e6947d41ce8cb30f569cd896a61bf6bd5"
+    "revision": "a73d60f387f91935c12003804303b12bfba79af9"
   },
   "files": [
     {
@@ -43,7 +43,7 @@
     {
       "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Host.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Host.java",
-      "sha256": "974c51e84638f5e708cab471100d9cfcc7f7ff9af568f309c8285bd4c5e9455d"
+      "sha256": "78bc31be60b1f5f1eab26cb55ea4db91e2859e3f6d3780a8297595c61e3ca17b"
     },
     {
       "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/HostChannel.java",
@@ -53,12 +53,12 @@
     {
       "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/HostError.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/HostError.java",
-      "sha256": "fc24c7ede0363c32c11b4bea6b879401524267b90f2db9930fda1338b32e4bf3"
+      "sha256": "d9437e02cad3ddcc0e0755ba9e5ab86c6eebd28d93f2f5c05ab2bb3bb1c4007b"
     },
     {
       "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Json.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Json.java",
-      "sha256": "7ff4a54ab5003cd86046db3b35110b4906b97fc56b8d934f33e6f51eb96dd5ed"
+      "sha256": "55218dad99cabf02fc3b2ddd74046632ce1c29e0803e773a11c915db3df915d0"
     },
     {
       "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/PluginError.java",
@@ -78,7 +78,7 @@
     {
       "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/Protocol.java",
       "path": "vendor/lithe-plugin-sdk-java/src/main/java/io/github/litheidea/plugin/sdk/Protocol.java",
-      "sha256": "c84c26121c2997826269c5503dbd11cf437acfa13c2ab3c4f2ea29652a096712"
+      "sha256": "ccbbddd21173ab11b368a1464f6f26ad9e329a819cc011cf79f888b48ba158e1"
     },
     {
       "upstream": "shared/plugins/sdk/java/plugin-sdk/src/main/java/io/github/litheidea/plugin/sdk/StateStore.java",

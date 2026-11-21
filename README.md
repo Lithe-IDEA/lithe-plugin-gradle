@@ -36,18 +36,18 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 ## Java 语言服务器的导入设置
 
 旧版清单里的 `buildSystems[].languageImport` 已从插件契约删除。现在 Gradle 插件导出插件函数 `languageImport.settings`
-（函数接口版本 1，`context: "workspace"`；传输协议和能力协商版本为 0），Java Support 在启动 JDT LS 前调用它，只接受 `java.import.gradle.` 等白名单前缀内的键。
-后端只读取工作区里的文件，不运行 Gradle、不写任何文件：
+（函数接口版本 1，`context: "workspace"`；传输协议和能力协商版本为 0），Java Support 在启动 JDT LS 前调用它，只接受 `java.import.gradle.` 等白名单前缀内的键。Gradle 后端读取宿主已保存的构建选项和本地配置文件。
 
 | 来源 | 导出的键 |
 | --- | --- |
-| 环境变量 `GRADLE_USER_HOME`（绝对路径） | `java.import.gradle.user.home` |
+| 工具栏的 Offline 开关 | `java.import.gradle.offline.enabled` |
+| 工具栏的 Gradle User Home，其次是绝对路径 `GRADLE_USER_HOME`，最后是 `~/.gradle` | `java.import.gradle.user.home` |
 | `gradle.properties` 的 `org.gradle.java.home`（绝对路径） | `java.import.gradle.java.home` |
 | `gradle.properties` 的 `org.gradle.jvmargs` | `java.import.gradle.jvmArguments` |
 
 `gradle.properties` 按 Gradle 的真实优先级合并：Gradle User Home 高于项目根（[官方规则](https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_configuration_properties)）。`workspaceRoot` 必须落在已打开的本地工作区文件夹内，
-否则函数拒绝（`gradle.invalidRoot`）。工具栏的 Offline 与 Gradle User Home 选项只保存在宿主里，插件后端读不到，
-所以它们不再传给 JDT LS，需要宿主把已存选项交给插件函数后才能恢复。后端用 Lithe 找到的 Java（8 或更新版本）运行，初始堆 16 MiB、最大堆 128 MiB；此限制不改变 Gradle 或 JDT LS 的堆配置。
+否则函数拒绝（`gradle.invalidRoot`）。Gradle 后端观察选项和两个属性文件，配置变化时通过 `languageImport.settingsChanged` v1 将新快照发送给 Java Support。
+这个流程要求支持 `build/getOptions` 和 `build/watchConfiguration` 的宿主。后端用 Lithe 找到的 Java（8 或更新版本）运行，初始堆 16 MiB、最大堆 128 MiB；此限制不改变 Gradle 或 JDT LS 的堆配置。
 可选属性文件不存在时正常继续；不可读、非普通文件、格式损坏或超过 256 KiB 时返回分类失败，不用默认值掩盖配置问题。
 
 ## 依赖的程序
@@ -136,14 +136,22 @@ GRADLE=/path/to/gradle node scripts/test.mjs
 `dist/package/io.github.lithe-idea.gradle-build` 即可安装本地开发包（兼容 Viva 客户端按社区插件信任流程确认安装）。
 
 `plugin.json` 与插件开发资料只以 [Rust Core 的 shared/plugins](https://github.com/Lithe-IDEA/Lithe-core-rust/tree/main/shared/plugins) 为准。
-本分支 Java SDK 固定到 Core `0be1d34f8926fc284a23874a4f6a57a14e339de8`，源码原样保存于 vendor，
-`sdk.lock.json` 逐文件校验来源与 SHA-256；`node scripts/sdk/verify-sdk.mjs` 可离线校验。
+Java SDK 源码原样保存于 vendor，`sdk.lock.json` 固定 Core 提交并记录每个文件的来源和 SHA-256。
+运行 `node scripts/sdk/verify-sdk.mjs` 可离线校验。
 SDK 的旧日志注释仍提及版本 1，实际协商实现使用版本 0；插件没有修改官方 SDK。
+
+可在 macOS 上用真实 Java Support 和 JDT LS 复测设置中继。先运行 `node scripts/package.mjs`，准备 Java Support 包以及其清单选定平台的托管 JDK、JDT LS 原始归档。Gradle ZIP、解压后的 Gradle 和项目 JDK 应彼此兼容，例如 Gradle 7.6 与 JDK 17。
+
+```sh
+node scripts/language-import/test.mjs <Lithe检出> <Java插件目录> <托管JDK归档> <JDT-LS归档> <Gradle-ZIP> <解压后Gradle目录> <项目JDK目录>
+```
+
+测试通过 Go overlay 启动真实插件后端，检查首次下发、工具栏变更、属性文件改写和删除是否传到同一个 JDT LS 进程。使用本地 Core 分支时，通过 `LITHE_CORE_RUST_DIR` 指定与宿主匹配的检出。无 Java Support 的流程用 `node scripts/test.mjs` 复测。
 
 ## 诊断日志
 
 后端通过官方 SDK 上报结构化操作结果，宿主统一写入插件通道；插件不自建日志文件。
-`languageImport.settings` 是高频读取，关闭成功记录，失败保留一次 ERROR。当前没有降级或恢复分支。
+`languageImport.settings` 是高频读取，关闭成功记录，失败保留一次 ERROR。宿主缺少观察能力、观察重建或向 Java Support 发送失败时，写入分类降级事件。
 分类标识为 `gradle.invalidRoot`、`gradle.noWorkspaceContext`、`gradle.propertiesUnreadable`、`gradle.propertiesTooLarge`、`gradle.propertiesInvalid`；
 日志不包含路径、属性值或构建输出。Java SDK 握手及生命周期由宿主记录。
 

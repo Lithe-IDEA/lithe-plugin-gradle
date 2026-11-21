@@ -59,9 +59,12 @@ public final class Protocol {
     public static final String HOST_CREDENTIALS_DELETE = "lithe/host/credentials/delete";
     public static final String HOST_GET_CAPABILITIES = "lithe/host/getCapabilities";
     public static final String HOST_SUBSCRIPTIONS_DISPOSE = "lithe/host/subscriptions/dispose";
+    public static final String HOST_BUILD_GET_OPTIONS = "lithe/host/build/getOptions";
+    public static final String HOST_BUILD_WATCH_CONFIGURATION = "lithe/host/build/watchConfiguration";
     public static final String HOST_WORKSPACE_LIST_CONTEXTS = "lithe/host/workspace/listContexts";
     public static final String HOST_WORKSPACE_GET_CONTEXT = "lithe/host/workspace/getContext";
     public static final String HOST_WORKSPACE_GET_FOLDERS = "lithe/host/workspace/getFolders";
+    public static final String HOST_WORKSPACE_GET_HOST_PATHS = "lithe/host/workspace/getHostPaths";
     public static final String HOST_WORKSPACE_READ_DIRECTORY = "lithe/host/workspace/readDirectory";
     public static final String HOST_WORKSPACE_STAT = "lithe/host/workspace/stat";
     public static final String HOST_WORKSPACE_READ_FILE = "lithe/host/workspace/readFile";
@@ -114,6 +117,8 @@ public final class Protocol {
     /** Unanswered host requests Core allows a session; the SDK queues the rest. */
     public static final int MAX_PENDING_HOST_REQUESTS = 16;
     public static final int MAX_CREDENTIAL_SECRET_BYTES = 16 * 1024;
+    /** The most root IDs one {@code getHostPaths} request names. */
+    public static final int MAX_HOST_PATH_ROOTS = 256;
     /** Timeout Core gives a relayed call that names none. */
     public static final int RELAY_DEFAULT_TIMEOUT_MILLISECONDS = 60000;
     /** Longest timeout of a relayed call; the SDK sends a longer one unchanged and leaves the cap to Core. */

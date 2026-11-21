@@ -10,6 +10,13 @@
 
 Windows 验证使用已构建的 Windows 插件包和相同的 Build Provider 请求，工作台运行按钮及调试连接仍待验证。
 
+## Java 导入设置
+
+| 能力 | macOS | Windows | 验证入口 |
+| --- | --- | --- | --- |
+| 离线选项、Gradle User Home 和属性文件应用于 JDT LS | 已验证，真实 JDT LS 收到首次设置和运行期间的更新 | 已实现，实机待验证 | `scripts/language-import/test.mjs` 检查同进程收包，`scripts/test-backend.mjs` 检查属性优先级和订阅清理 |
+| 单独使用 Gradle 插件 | 已验证 | 此次改动待复测 | `scripts/test.mjs` 使用 Gradle 7.6 验证模型、依赖、当前文件运行和测试 |
+
 ## Linux 安装包
 
 | 能力 | Linux ARM64 | Linux x64 | 验证入口 |
