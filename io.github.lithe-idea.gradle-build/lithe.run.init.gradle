@@ -1,0 +1,86 @@
+// Export only the evaluated Gradle source set that owns the selected Java
+// file. Its runtime FileCollection supplies both files and their build tasks.
+import groovy.json.JsonOutput
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
+import java.util.jar.Attributes
+import java.util.jar.JarOutputStream
+import java.util.jar.Manifest
+
+if (gradle.parent != null) {
+    return
+}
+
+def properties = gradle.startParameter.systemPropertiesArgs
+String output = properties['lithe.runOutput']
+String source = properties['lithe.runFile']
+if (output == null || source == null) {
+    return
+}
+File file = new File(source).canonicalFile
+boolean chinese = properties['lithe.runLocale'] == 'zh'
+
+gradle.projectsEvaluated { build ->
+    def root = build.rootProject
+    List owners = []
+    root.allprojects.each { project ->
+        project.extensions.findByName('sourceSets')?.each { sourceSet ->
+            if (sourceSet.java.srcDirs.any { file.toPath().startsWith(it.canonicalFile.toPath()) }
+                    && sourceSet.java.contains(file)) {
+                owners << [project, sourceSet]
+            }
+        }
+    }
+    if (owners.size() != 1) {
+        String message = chinese ? '请选择仅属于一个 Gradle 源集的 Java 文件：' :
+            'Select a Java file belonging to exactly one Gradle source set: '
+        throw new GradleException(message + file.name)
+    }
+    def (project, sourceSet) = owners.first()
+    String projectPath = root.projectDir.toPath().relativize(project.projectDir.toPath()).toString()
+        .replace(File.separator, '/')
+    if (projectPath == '..' || projectPath.startsWith('../')) {
+        throw new GradleException(chinese ? '所选 Gradle 项目位于构建根目录之外。' :
+            'The selected Gradle project is outside the build root.')
+    }
+    def runtime = sourceSet.runtimeClasspath
+    def buildDirectory = project.layout.buildDirectory
+    root.tasks.register('lithePrepareJavaRun') {
+        dependsOn(runtime)
+        doLast {
+            List<File> files = runtime.files as List
+            String classpath = files.collect { it.absolutePath }.join(File.pathSeparator)
+            if (classpath.length() > 20_000) {
+                classpath = manifestClasspath(files, buildDirectory.dir('lithe/java-run').get().asFile)
+            }
+            new File(output).setText(JsonOutput.toJson([classpath: classpath, project: projectPath ?: '.']), 'UTF-8')
+        }
+    }
+}
+
+// Java 8 and Windows can start a long classpath through a manifest JAR. The
+// content-addressed file is published atomically and removed by Gradle clean.
+String manifestClasspath(List<File> files, File directory) {
+    String urls = files.collect { it.toURI().toASCIIString() }.join(' ')
+    String digest = MessageDigest.getInstance('SHA-256').digest(urls.getBytes('UTF-8')).encodeHex().toString()
+    def output = directory.toPath().resolve(digest + '.jar')
+    if (!Files.isRegularFile(output)) {
+        Files.createDirectories(output.parent)
+        def staging = Files.createTempFile(output.parent, 'classpath-', '.jar')
+        try {
+            Manifest manifest = new Manifest()
+            manifest.mainAttributes.put(Attributes.Name.MANIFEST_VERSION, '1.0')
+            manifest.mainAttributes.put(Attributes.Name.CLASS_PATH, urls)
+            new JarOutputStream(Files.newOutputStream(staging), manifest).close()
+            try {
+                Files.move(staging, output, StandardCopyOption.ATOMIC_MOVE)
+            } catch (java.nio.file.FileAlreadyExistsException concurrentLaunch) {
+                // Another launch published the same bytes.
+            }
+        } finally {
+            Files.deleteIfExists(staging)
+        }
+    }
+    return output.toString()
+}

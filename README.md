@@ -17,7 +17,8 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 | --- | --- |
 | 识别项目 | 最外层含 `settings.gradle(.kts)` 或 `build.gradle(.kts)` 的目录是构建根，`include` 的子项目组成项目树 |
 | 任务 | 每个项目的全部任务，按 `Tasks › <分组>` 归类（build、verification、help…，没有分组的放在 other）；根项目任务按名称运行（作用于所有项目，与 `gradle build` 相同），子项目任务按路径运行（`:app:build`） |
-| 运行 | `JavaExec` 类型的任务（如 `application` 插件的 `run`）作为可运行的应用 |
+| 运行 | 构建工具窗口可运行 `JavaExec` 任务。在工具栏选择「当前文件」可运行 Gradle source set 内的 Java 主类，并保存为可编辑的运行配置 |
+| 调试 | 当前文件和由它保存的配置使用 Java Support 提供的调试适配器 |
 | 自定义任务 | “Run Gradle Tasks…” 输入任意任务和参数，选中子项目时在该项目目录下运行 |
 | 选项 | 工具栏开关 Offline（`--offline`）；Gradle User Home（`--gradle-user-home`） |
 | 测试 | 运行项目、测试类或单个方法（`--tests`），读取 `build/test-results/test` 的 JUnit XML 报告；`--rerun` 仅重新执行所选测试任务，编译等依赖仍使用增量缓存，避免旧报告被宿主过滤后显示为零 |
@@ -73,9 +74,22 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 
 读取项目会执行构建脚本和其中的插件，首次读取还可能联网下载插件和依赖元数据，所以 Lithe 会先确认你信任这个工作区。
 
+### 从当前文件运行 Java
+
+打开属于 Gradle Java source set 的源码，在工具栏选择「当前文件」，再点运行或调试。插件按需识别顶层类的
+`public static void main(String[])`，并通过项目的 Gradle 调用该 source set 运行类路径所依赖的构建任务。
+构建成功后，Lithe 用所选 Java 工具链启动 JVM，运行配置中的程序参数、JVM 参数、工作目录和环境变量会一并生效。
+该入口使用常规 JVM classpath。自定义 `JavaExec` 任务可继续从构建工具窗口运行。
+
+入口发现使用 JDK 17 或更新版本的 javac，只解析当前文件，最多读取 4 MiB。准备运行时，Gradle
+将结果写到插件创建的系统临时文件，调用结束后删除。长类路径会在所属模块的 Gradle 构建目录
+`lithe/java-run/` 下生成内容寻址的 manifest JAR，随 `gradle clean` 清理。JAR 引用本机构建输出和依赖缓存，
+每个检出各自生成。插件的 init script 和后端 JAR 只从已安装插件目录读取，运行期间保持插件和应用包的签名基线。
+
 ## 安装
 
 相对已发布的 0.1.2，此次契约迁移要求更换宿主：旧版 macOS Lithe 不能安装当前包。
+当前文件运行和调试需要支持 `buildProviders` 1 与 `buildSystems` 2 的 Lithe。
 按仓库版本规则记为 1.0.0（重大兼容性变化）；用户需先换用配套 Viva preview，再安装新包。
 设置键、Gradle 的最低版本与项目文件没有迁移。当前没有稳定宿主支持这份契约，发布时必须为预发布；发布为草稿预发布，下载校验后由维护者公开。
 
@@ -90,6 +104,8 @@ IntelliJ IDEA 一样按项目列出任务分组和依赖配置，运行任务、
 io.github.lithe-idea.gradle-build/plugin.json         # 插件描述，目录名必须等于插件 id
 io.github.lithe-idea.gradle-build/lithe.init.gradle   # 初始化脚本，导出模型和依赖树
 backend/                                              # languageImport.settings 后端（Java），打包成 lib/lithe-gradle-backend.jar
+provider/                                             # Java 主类发现和运行准备，打包成 lib/lithe-gradle-run-provider.jar
+io.github.lithe-idea.gradle-build/lithe.run.init.gradle # 编译源集并导出 Gradle 运行类路径
 vendor/lithe-plugin-sdk-java/                         # 固定版本的官方 Java SDK 源码（sdk.lock.json 逐文件校验，编译进后端 jar）
 io.github.lithe-idea.gradle-build/icons/              # 工具窗口和工具栏图标（来源见 NOTICE）
 io.github.lithe-idea.gradle-build/templates/java/     # New Project 的 Gradle Java 项目模板（Kotlin/Groovy DSL、示例代码）

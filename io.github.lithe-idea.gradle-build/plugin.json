@@ -4,13 +4,13 @@
   "displayName": "Gradle",
   "version": "2.0.0",
   "pluginAPIVersion": 0,
-  "requires": {"backend": 0, "buildSystems": 0, "pluginFunctions": 0, "projectGenerators": 0, "settings": 0, "sourceSettings": 0},
+  "requires": {"backend": 0, "buildSystems": 2, "buildProviders": 1, "pluginFunctions": 0, "projectGenerators": 0, "settings": 0, "sourceSettings": 0},
   "vendor": {
     "id": "io.github.lithe-idea",
     "displayName": "Lithe Community",
     "signatureRequirement": "none"
   },
-  "permissions": ["backend.launch", "process.build", "project.generate", "workspace.metadata"],
+  "permissions": ["backend.launch", "languageServer.launch", "process.build", "project.generate", "workspace.metadata"],
   "activationEvents": ["onBuildSystem:gradle"],
   "languages": [],
   "backend": {
@@ -106,7 +106,13 @@
           ]
         }
       ],
+      "provider": {
+        "launch": { "kind": "runtime", "tool": "java", "minimumVersion": "17", "entry": "lib/lithe-gradle-run-provider.jar", "runtimeArguments": ["-Xms16m", "-Xmx128m"] },
+        "executesProjectCode": true,
+        "mayUseNetwork": true
+      },
       "run": [
+        { "id": "java-main", "source": "provider", "entrypoints": true, "debug": { "configurationType": "java" } },
         {
           "id": "task",
           "fromTasks": { "templates": ["gradle-task"], "executions": ["application"] },

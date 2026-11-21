@@ -1,5 +1,15 @@
 # 功能验证矩阵
 
+## 从当前文件运行和调试 Java
+
+| 能力 | macOS | Windows | 验证入口 |
+| --- | --- | --- | --- |
+| 发现 Java 主类及保存可编辑的运行配置 | 已实现，Apple Silicon 无头工作台验证通过 | 已实现，Petclinic 主类发现通过，保存配置待验证 | Spring Petclinic 和 JUnit 5 的 Java 启动类 |
+| 通过所属 Gradle 源集构建并运行 | 已实现，Petclinic 首页返回 HTTP 200；JUnit 的控制台发布产物由项目自带任务组装 | 已实现，Windows 11 ARM64 来宾使用 x64 JDK，Petclinic 通过提供者和 Wrapper 构建并返回 HTTP 200 | `scripts/test.mjs` 校验模块依赖、应用参数、正常退出、编译错误和包字节不变 |
+| Java 调试器连接及停止 | 已实现，Apple Silicon 无头工作台验证通过 | 已实现，完整工作台验收待验证 | 两个开源项目实测断点和停止 |
+
+Windows 验证使用已构建的 Windows 插件包和相同的 Build Provider 请求，工作台运行按钮及调试连接仍待验证。
+
 ## Linux 安装包
 
 | 能力 | Linux ARM64 | Linux x64 | 验证入口 |

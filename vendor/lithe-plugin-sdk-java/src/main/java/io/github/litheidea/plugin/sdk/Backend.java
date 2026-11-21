@@ -48,6 +48,12 @@ public final class Backend {
         Object handle(Map<String, Object> params, CallContext context) throws Exception;
     }
 
+    /** Answers one call to a view function; null means nothing changed. */
+    @FunctionalInterface
+    public interface ViewHandler {
+        ViewResult handle(ViewEvent event, CallContext context) throws Exception;
+    }
+
     /** Answers an independently negotiated shortcut import request. */
     @FunctionalInterface
     public interface KeymapImportHandler {
@@ -190,10 +196,13 @@ public final class Backend {
         formats.put(Protocol.BUILD_MODEL, "litheBuildModel");
         formats.put(Protocol.BUILD_DEPENDENCIES, "litheDependencies");
         formats.put(Protocol.BUILD_DISCOVER_TESTS, "litheTestDiscovery");
+        formats.put(Protocol.BUILD_RUN_ENTRYPOINTS, "litheRunEntrypoints");
         BUILD_FORMATS = Collections.unmodifiableMap(formats);
     }
 
     private volatile boolean logging;
+    /** The negotiated build protocol version, the newest the host offered; -1 before. */
+    private volatile int buildVersion = -1;
     private boolean loggingReady;
     private final List<Map<String, Object>> earlyDiagnostics = new ArrayList<>();
     private final java.util.Set<String> quietSuccess = new java.util.HashSet<>();
@@ -328,6 +337,14 @@ public final class Backend {
     }
 
     /**
+     * Names the entrypoints of one source file that an entrypoint run starts
+     * ({@code buildProviders} 1), with the format stamped.
+     */
+    public Backend onRunEntrypoints(Handler handler) {
+        return declareBuild(Protocol.BUILD_RUN_ENTRYPOINTS, handler);
+    }
+
+    /**
      * Declares a plugin function offered from the start, in the {@code initialize}
      * answer. To add one later, use {@link #registerFunction}.
      *
@@ -343,6 +360,21 @@ public final class Backend {
             functions.put(id, handler);
         }
         return this;
+    }
+
+    /**
+     * Declares the view function a tool window or settings region names in
+     * {@code view.function}: a plugin function whose params are a
+     * {@link ViewEvent}. The SDK answers the handler's {@link ViewResult}, and
+     * {@code {}} when it returns null. Params that are not a view event fail
+     * the call before the handler runs.
+     */
+    public Backend view(String id, ViewHandler handler) {
+        Handler answer = handler == null ? null : (params, context) -> {
+            ViewResult result = handler.handle(ViewEvent.parse(params), context);
+            return (result == null ? ViewResult.unchanged() : result).toJson();
+        };
+        return function(id, answer);
     }
 
     /** Declares a shortcut import provider before initialization. */
@@ -803,9 +835,15 @@ public final class Backend {
                         "The backend requires litheLogging version " + Protocol.LOGGING_VERSION + "."));
                 return;
             }
+            buildVersion = -1;
+            for (int version = Protocol.BUILD_VERSION; version >= 0 && buildVersion < 0; version--) {
+                if (offers(offered.get("litheBuild"), version)) {
+                    buildVersion = version;
+                }
+            }
             agreed = new Negotiated(
                     offers(offered.get("litheFunctions"), Protocol.FUNCTIONS_VERSION),
-                    !buildHandlers.isEmpty() && offers(offered.get("litheBuild"), Protocol.BUILD_VERSION));
+                    !buildHandlers.isEmpty() && buildVersion >= 0);
             negotiated = agreed;
             hooks = new ArrayList<>(initializeHooks);
         }
@@ -852,7 +890,7 @@ public final class Backend {
                     }
                 }
                 if (agreed.build()) {
-                    experimental.put("litheBuild", singleton("version", Protocol.BUILD_VERSION));
+                    experimental.put("litheBuild", singleton("version", buildVersion));
                 }
                 if (agreed.functions()) {
                     List<Object> offered = new ArrayList<>();

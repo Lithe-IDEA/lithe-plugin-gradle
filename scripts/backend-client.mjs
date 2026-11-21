@@ -75,12 +75,12 @@ export class BackendClient {
     this.notify("$/cancelRequest", { id });
   }
 
-  async initialize(root, { functions = false } = {}) {
+  async initialize(root, { functions = false, buildVersion = 0 } = {}) {
     const result = await this.request("initialize", {
       processId: process.pid,
       rootUri: pathToFileURL(root).href,
       capabilities: { experimental: {
-        ...(functions ? { litheFunctions: { versions: [0] } } : { litheBuild: { versions: [0] } }),
+        ...(functions ? { litheFunctions: { versions: [0] } } : { litheBuild: { versions: [buildVersion] } }),
         litheLogging: { versions: [0] },
       } },
     });
