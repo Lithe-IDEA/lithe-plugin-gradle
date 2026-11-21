@@ -10,14 +10,15 @@
     "displayName": "Lithe Community",
     "signatureRequirement": "none"
   },
-  "permissions": ["backend.launch", "languageServer.launch", "process.build", "project.generate", "workspace.metadata"],
+  "permissions": ["backend.launch", "languageServer.launch", "process.build", "project.generate", "workspace.metadata", "build.options.read", "build.configuration.watch"],
   "activationEvents": ["onBuildSystem:gradle"],
   "languages": [],
   "backend": {
     "launch": { "kind": "runtime", "tool": "java", "minimumVersion": "8", "entry": "lib/lithe-gradle-backend.jar", "runtimeArguments": ["-Xms16m", "-Xmx128m"] }
   },
   "pluginFunctions": {
-    "exports": [{ "id": "languageImport.settings", "version": 1, "context": "workspace" }]
+    "exports": [{ "id": "languageImport.settings", "version": 1, "context": "workspace" }],
+    "calls": [{ "id": "languageImport.settingsChanged", "version": 1 }]
   },
   "buildSystems": [
     {

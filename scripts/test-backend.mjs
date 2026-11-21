@@ -25,11 +25,25 @@ const scratch = realpathSync(mkdtempSync(join(tmpdir(), "lithe-gradle-backend-te
 const workspace = join(scratch, "workspace");
 const outside = join(scratch, "outside");
 const gradleHome = join(scratch, "gradle-home");
+const toolbarHome = join(scratch, "toolbar-home");
+const watchMethod = "lithe/host/build/watchConfiguration";
+const optionsMethod = "lithe/host/build/getOptions";
+const changedFunction = "languageImport.settingsChanged";
+let selectedOptions = {};
+let nextWatch = 0;
+let contexts = [{ contextID: "ctx", generation: 1 }];
+let onDispose;
+let watches = new Map();
+let deliveries = [];
+let onDelivery;
+const expectDelivery = () => bounded(new Promise((resolve) => { onDelivery = resolve; }), "a settings change");
 const home = join(scratch, "home");
 const jdkHome = join(scratch, "chosen-jdk").replaceAll("\\", "/");
-for (const directory of [join(workspace, "app"), outside, gradleHome, home]) mkdirSync(directory, { recursive: true });
+for (const directory of [join(workspace, "app"), outside, gradleHome, toolbarHome, home]) mkdirSync(directory, { recursive: true });
 writeFileSync(join(gradleHome, "gradle.properties"), `org.gradle.jvmargs=-Xmx1g\norg.gradle.java.home=${jdkHome}\norg.gradle.parallel=true\n`);
 writeFileSync(join(workspace, "app", "gradle.properties"), "org.gradle.jvmargs=-Xmx4g \\\n  -Dfile.encoding=UTF-8\norg.gradle.java.home=relative/jdk\n");
+writeFileSync(join(workspace, "app", "build.gradle"), "");
+writeFileSync(join(toolbarHome, "gradle.properties"), "org.gradle.jvmargs=-Xmx2g\n");
 symlinkSync(outside, join(workspace, "escape"), process.platform === "win32" ? "junction" : "dir");
 
 let client;
@@ -46,16 +60,42 @@ try {
     // verify Core's tool-template instantiation and the real entry path.
     javaOptions: [`-Duser.home=${home}`, ...manifest.backend.launch.runtimeArguments],
     env: { ...process.env, GRADLE_USER_HOME: gradleHome },
-    hostRequests: { "lithe/host/workspace/getFolders": () => ({ folders: [{ rootID: "r", name: "w", path: workspace }] }) },
+    hostRequests: {
+      "lithe/host/workspace/getFolders": () => ({ folders: [{ rootID: "r", name: "w", path: workspace }] }),
+      "lithe/host/workspace/listContexts": () => ({ contexts }),
+      "lithe/host/getCapabilities": () => ({ services: { build: { methods: [watchMethod, optionsMethod] } } }),
+      [optionsMethod]: ({ buildSystemID, root }) => {
+        assert.equal(buildSystemID, "gradle");
+        assert.equal(root, "app");
+        return { options: selectedOptions };
+      },
+      [watchMethod]: ({ files }) => {
+        const id = `watch-${++nextWatch}`;
+        watches.set(id, { files, sequence: 0 });
+        return { subscriptionID: id };
+      },
+      "lithe/host/subscriptions/dispose": ({ subscriptionID }) => {
+        watches.delete(subscriptionID);
+        onDispose?.(subscriptionID);
+        return null;
+      },
+      "lithe/host/functions/invoke": (request) => {
+        deliveries.push(request);
+        onDelivery?.(request);
+        onDelivery = undefined;
+        return { value: {} };
+      },
+    },
   });
   const initialized = await client.initialize(workspace, { functions: true });
   assert.deepEqual(initialized.capabilities.experimental.litheFunctions.functions, [{ id: "compiler.prepareSettings" }, { id: "compiler.settings" }, { id: "languageImport.settings" }, { id: "libraries.settings" }]);
-  const invoke = (workspaceRoot, context = { contextID: "ctx", generation: 1 }) => client.send("lithe/function/invoke", {
-    functionID: "languageImport.settings", operationID: `op-${Math.random()}`, params: { workspaceRoot }, ...(context ? { context } : {}),
+  const invoke = (workspaceRoot, context = { contextID: "ctx", generation: 1 }, caller) => client.send("lithe/function/invoke", {
+    functionID: "languageImport.settings", operationID: `op-${Math.random()}`, params: { workspaceRoot }, ...(context ? { context } : {}), ...(caller ? { caller } : {}),
   }).response;
 
   await step("Gradle user home properties take precedence over project values and only known keys are exported", async () => {
     assert.deepEqual((await invoke(join(workspace, "app"))).result, { settings: {
+      "java.import.gradle.offline.enabled": false,
       "java.import.gradle.user.home": gradleHome,
       "java.import.gradle.jvmArguments": "-Xmx1g",
       "java.import.gradle.java.home": jdkHome,
@@ -84,6 +124,65 @@ try {
     }
     const facts = JSON.stringify(client.diagnostics);
     for (const privateValue of [scratch, "org.gradle.java.home", "/jdk/home", "-Xmx4g"]) assert.equal(facts.includes(privateValue), false, "diagnostics contain no configuration content");
+  });
+  await step("toolbar changes switch Gradle homes and publish the full updated import snapshot", async () => {
+    const root = join(workspace, "app");
+    const context = { contextID: "ctx", generation: 1 };
+    const caller = { pluginID: "test.java" };
+    assert.equal((await invoke(root, context, caller)).result.settings["java.import.gradle.user.home"], gradleHome);
+    const invalidate = (id) => client.notify("lithe/host/subscriptions/notify", {
+      subscriptionID: id, sequence: ++watches.get(id).sequence, event: { type: "changed" },
+    });
+    let id = [...watches.keys()][0];
+    selectedOptions = { offline: true, gradleUserHome: toolbarHome };
+    let delivery = expectDelivery();
+    invalidate(id);
+    const request = await delivery;
+    assert.equal(request.pluginID, caller.pluginID);
+    assert.equal(request.functionID, changedFunction);
+    assert.deepEqual(request.params, { settings: {
+      "java.import.gradle.offline.enabled": true,
+      "java.import.gradle.user.home": toolbarHome,
+      "java.import.gradle.jvmArguments": "-Xmx2g",
+      "java.import.gradle.java.home": "",
+    } });
+    assert.equal(watches.has(id), false, "the previous user home watch was disposed");
+    id = [...watches.keys()][0];
+    assert.deepEqual(watches.get(id).files, [join(root, "gradle.properties"), join(toolbarHome, "gradle.properties")]);
+    rmSync(join(toolbarHome, "gradle.properties"));
+    writeFileSync(join(root, "gradle.properties"), "org.gradle.jvmargs=-Xmx3g\n");
+    delivery = expectDelivery();
+    invalidate(id);
+    assert.equal((await delivery).params.settings["java.import.gradle.jvmArguments"], "-Xmx3g");
+    rmSync(join(root, "gradle.properties"));
+    delivery = expectDelivery();
+    invalidate(id);
+    const removed = (await delivery).params.settings;
+    assert.equal(removed["java.import.gradle.java.home"], "");
+    assert.deepEqual(removed["java.import.gradle.jvmArguments"], []);
+    selectedOptions = {};
+    delivery = expectDelivery();
+    invalidate(id);
+    const cleared = (await delivery).params.settings;
+    assert.equal(cleared["java.import.gradle.offline.enabled"], false);
+    assert.equal(cleared["java.import.gradle.user.home"], gradleHome);
+    assert.equal(cleared["java.import.gradle.jvmArguments"], "-Xmx1g");
+  });
+  await step("a workspace unrelated to Gradle does not install a watcher or send language settings", async () => {
+    const before = watches.size;
+    assert.deepEqual((await invoke(workspace)).result, { settings: {} });
+    assert.equal(watches.size, before);
+    assert.equal(deliveries.length, 4);
+  });
+  await step("closing a workspace releases its configuration subscription", async () => {
+    assert.equal(watches.size, 1);
+    const [subscription] = watches.keys();
+    const disposed = bounded(new Promise((resolve) => { onDispose = resolve; }), "workspace subscription disposal");
+    contexts = [{ contextID: "ctx", generation: 2 }];
+    client.notify("lithe/host/workspace/didChangeContexts", { revision: 2 });
+    assert.equal(await disposed, subscription);
+    assert.equal(watches.size, 0);
+    onDispose = undefined;
   });
   await step("the backend exits on shutdown", async () => {
     assert.equal(await client.close(), 0, `the backend exits cleanly\n${client.stderr}`);

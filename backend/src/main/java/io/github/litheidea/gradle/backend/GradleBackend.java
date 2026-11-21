@@ -12,7 +12,9 @@ public final class GradleBackend {
 
     public static void main(String[] arguments) {
         Backend backend = Backend.create("lithe-gradle-backend", version());
-        backend.function(LanguageImport.FUNCTION, (params, context) -> LanguageImport.handle(params, context, System.getenv()));
+        LanguageImport languageImport = new LanguageImport(backend, System.getenv());
+        backend.function(LanguageImport.FUNCTION, languageImport::handle);
+        backend.onContextsChanged(languageImport::contextsChanged);
         backend.suppressSuccessDiagnostics(LanguageImport.FUNCTION);
         backend.function("compiler.settings",(params,context)->CompilerSettings.read(params,context,false));
         backend.suppressSuccessDiagnostics("compiler.settings");
