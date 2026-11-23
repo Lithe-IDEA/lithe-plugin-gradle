@@ -1,7 +1,7 @@
-// Talks to lib/lithe-maven-backend.jar the way Lithe does: LSP base-protocol
-// frames over the process's stdio, `initialize` offering litheBuild 1, then
-// lithe/build/* requests. Every wait is bounded, and the backend runs in its
-// own process group so a test can always end whatever it left behind.
+// Drives the Gradle settings backend and current-file run provider over LSP
+// stdio frames. Settings tests offer litheFunctions 0 by default; the run
+// provider test explicitly offers litheBuild 1. Every wait is bounded, and
+// the backend runs in its own process group for cleanup after a failure.
 import { execFileSync, spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
@@ -18,12 +18,12 @@ export class BackendClient {
   stderr = "";
   diagnostics = [];
 
-  /** Starts `java -jar <jar> --state <state>` (or `args`); `javaOptions` go before `-jar`. */
-  constructor({ java = "java", jar, state, env = process.env, javaOptions = [], timeoutMs = WAIT_MS, args, hostRequests = {} }) {
+  /** Starts `java -jar <jar>`; `javaOptions` go before `-jar`. */
+  constructor({ java = "java", jar, env = process.env, javaOptions = [], timeoutMs = WAIT_MS, hostRequests = {} }) {
     this.timeoutMs = timeoutMs;
     // Answers to requests the backend sends to the host, keyed by method.
     this.hostRequests = hostRequests;
-    this.child = spawn(java, [...javaOptions, "-jar", jar, ...(args ?? ["--state", state])], {
+    this.child = spawn(java, [...javaOptions, "-jar", jar], {
       env, stdio: ["pipe", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true,
     });
     this.exited = new Promise((resolve) => this.child.once("exit", (code, signal) => {
@@ -75,12 +75,12 @@ export class BackendClient {
     this.notify("$/cancelRequest", { id });
   }
 
-  async initialize(root, { functions = false, buildVersion = 0 } = {}) {
+  async initialize(root, { buildVersion } = {}) {
     const result = await this.request("initialize", {
       processId: process.pid,
       rootUri: pathToFileURL(root).href,
       capabilities: { experimental: {
-        ...(functions ? { litheFunctions: { versions: [0] } } : { litheBuild: { versions: [buildVersion] } }),
+        ...(buildVersion === undefined ? { litheFunctions: { versions: [0] } } : { litheBuild: { versions: [buildVersion] } }),
         litheLogging: { versions: [0] },
       } },
     });
