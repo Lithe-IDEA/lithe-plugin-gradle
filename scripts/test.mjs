@@ -268,7 +268,7 @@ try {
       "Gradle must handle current-file Run and Debug through its build provider");
     const client = new BackendClient({
       jar: join(pluginDir, "lib", "lithe-gradle-run-provider.jar"),
-      args: [], timeoutMs: COMMAND_TIMEOUT_MS,
+      timeoutMs: COMMAND_TIMEOUT_MS,
     });
     try {
       const initialized = await client.initialize(realpathSync(root), { buildVersion: 1 });

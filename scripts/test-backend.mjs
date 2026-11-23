@@ -54,7 +54,7 @@ const step = async (name, body) => {
 };
 try {
   client = new BackendClient({
-    java, jar, args: [],
+    java, jar,
     // The Java tool definition owns the JAR entry switch. This SDK probe
     // exercises the packaged JVM options; Viva integration tests additionally
     // verify Core's tool-template instantiation and the real entry path.
@@ -87,7 +87,7 @@ try {
       },
     },
   });
-  const initialized = await client.initialize(workspace, { functions: true });
+  const initialized = await client.initialize(workspace);
   assert.deepEqual(initialized.capabilities.experimental.litheFunctions.functions, [{ id: "compiler.prepareSettings" }, { id: "compiler.settings" }, { id: "languageImport.settings" }, { id: "libraries.settings" }]);
   const invoke = (workspaceRoot, context = { contextID: "ctx", generation: 1 }, caller) => client.send("lithe/function/invoke", {
     functionID: "languageImport.settings", operationID: `op-${Math.random()}`, params: { workspaceRoot }, ...(context ? { context } : {}), ...(caller ? { caller } : {}),
@@ -190,9 +190,9 @@ try {
   });
   for (const fault of ["abort", "oversized frame"]) {
     await step(`the driver reaps a backend after ${fault}`, async () => {
-      const peer = new BackendClient({java, jar, args: [], javaOptions: [`-Duser.home=${home}`]});
+      const peer = new BackendClient({java, jar, javaOptions: [`-Duser.home=${home}`]});
       try {
-        await peer.initialize(workspace, {functions: true});
+        await peer.initialize(workspace);
         if (fault === "abort") peer.kill();
         else peer.child.stdout.emit("data", Buffer.from("Content-Length: 1000000000\r\n\r\n"));
         await bounded(peer.exited, "faulted backend disposal", 2000);

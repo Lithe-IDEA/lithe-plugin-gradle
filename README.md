@@ -162,7 +162,7 @@ node scripts/language-import/test.mjs <Lithe检出> <Java插件目录> <托管JD
 后端脚本测试覆盖成功抑制、真实失败唯一性、可选文件缺失及损坏/超大属性文件，也覆盖主动中止与异常大报文后的进程清理。
 驱动限制帧 16 MiB、stderr 尾部 64 KiB、诊断 1000 条；Windows 用系统进程树终止，避免对负 PID 的 Unix 操作失效后留下 JVM。
 这些生命周期回归已在实际 Java 8 和原生 Windows 的 Java 8 后端运行。
-既有测试驱动的未使用 Maven 分支另见 [#1880](https://github.com/1lck/Lithe-IDEA/issues/1880)。
+`scripts/backend-client.mjs` 直接启动 Gradle JAR，默认协商 `litheFunctions` 0；当前文件运行测试显式选择 `litheBuild` 1。
 同一迁移后 JAR、同一 Java 8、六对交错测量，仅改变 JVM 堆选项：初始化并执行八次真实配置查询后的 RSS 中位数从
 45.98 MiB 变为 43.80 MiB（-4.72%，benchstat p=0.002）；初始化加八次查询的时间为 78.39/78.44 ms，无显著差异（p=0.485）。
 这是配置后端的单点 RSS，不是峰值或整套 Java 支持的内存；128 MiB 是 Java 堆上限，不是进程总内存上限。
