@@ -1,7 +1,7 @@
 // Drives the Gradle settings backend and current-file run provider over LSP
-// stdio frames. Settings tests offer litheFunctions 0 by default; the run
-// provider test explicitly offers litheBuild 1. Every wait is bounded, and
-// the backend runs in its own process group for cleanup after a failure.
+// stdio frames. Import and compiler settings tests offer litheFunctions 0
+// by default. The run provider test explicitly offers litheBuild 1. Every wait
+// is bounded, and the backend runs in its own process group for cleanup.
 import { execFileSync, spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
