@@ -6,7 +6,7 @@ import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,renameSync
 import {tmpdir} from 'node:os';
 import {join,resolve,relative} from 'node:path';
 import {runTool} from './process.mjs';
-import {BackendClient,bounded} from './backend-client.mjs';
+import {BackendClient,bounded} from '../backend-client.mjs';
 const pkg=resolve('dist/package/io.github.lithe-idea.gradle-build');
 const gradle=process.env.GRADLE??'gradle';
 const scratch=realpathSync.native(mkdtempSync(join(tmpdir(),'lithe-gradle-compiler-')));
@@ -24,7 +24,15 @@ try{
   for(const name of ['a','b']){mkdirSync(join(root,name,'src/main/java'),{recursive:true});writeFileSync(join(root,name,'build'+suffix),'// module configuration\n');writeFileSync(join(root,name,'src/main/java/Main.java'),'public class Main { public static void main(String[] args) { System.out.print("ok"); } }');}
   async function run(args){return await command(gradle,['--no-daemon','--no-configuration-cache','--no-configure-on-demand',...args],root);}
   async function model(){const output=join(root,'model.json');await run(['--init-script',join(pkg,'lithe.init.gradle'),`-Dlithe.modelOutput=${output}`,'litheModel']);const value=JSON.parse(readFileSync(output));for(const project of value.projects)project.path=relative(root,project.path).replaceAll('\\','/')||'.';return value;}
-  client=new BackendClient({java:process.env.LITHE_TEST_JAVA??'java',jar:join(pkg,'lib/lithe-gradle-backend.jar'),args:[],hostRequests:{'lithe/host/workspace/getFolders':()=>({folders:[{rootID:'r',name:'workspace',path:root}]})}});await client.initialize(root,{functions:true});let op=0;
+  client = new BackendClient({
+    java: process.env.LITHE_TEST_JAVA ?? 'java',
+    jar: join(pkg, 'lib/lithe-gradle-backend.jar'),
+    hostRequests: {
+      'lithe/host/workspace/getFolders': () => ({folders: [{rootID: 'r', name: 'workspace', path: root}]}),
+    },
+  });
+  await client.initialize(root);
+  let op=0;
   const invoke=(functionID,params)=>client.request('lithe/function/invoke',{functionID,operationID:`compiler-${++op}`,params,context:{contextID:'compiler',generation:1}});
   const read=async(libraries=false,language='zh-CN')=>invoke(libraries?'libraries.settings':'compiler.settings',{context:{language,builds:[{root:'.',options:{},tool:{executable:gradle},model:await model()}]}});
   let snapshot=await read();assert.equal(snapshot.sources.length,3);assert.equal(readFileSync(join(root,'build'+suffix),'utf8'),original);
